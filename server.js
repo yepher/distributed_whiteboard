@@ -162,6 +162,19 @@ wss.on('connection', (ws, req) => {
         break;
       }
 
+      case 'deleteElement': {
+        const board = getBoard(sess, msg.boardId);
+        if (board && msg.elementId) {
+          const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
+          if (idx !== -1) {
+            board.strokes.splice(idx, 1);
+            board.undone = [];
+            broadcast(ws._sessionId, msg);
+          }
+        }
+        break;
+      }
+
       case 'undo': {
         const board = getBoard(sess, msg.boardId);
         if (board && board.strokes.length > 0) {
@@ -244,6 +257,22 @@ wss.on('connection', (ws, req) => {
       case 'themeChange': {
         sess.theme = msg.theme;
         broadcast(ws._sessionId, { type: 'themeChange', theme: msg.theme });
+        break;
+      }
+
+      case 'resync': {
+        // Send full state to all viewers in this session
+        const fullState = JSON.stringify({
+          type: 'fullState',
+          boards: sess.boards.map((b) => ({ id: b.id, strokes: b.strokes })),
+          currentBoardId: sess.currentBoardId,
+          theme: sess.theme,
+        });
+        for (const viewer of sess.clients.viewers) {
+          if (viewer.readyState === 1) {
+            viewer.send(fullState);
+          }
+        }
         break;
       }
     }

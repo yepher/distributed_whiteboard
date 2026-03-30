@@ -86,6 +86,10 @@
         lastLiveSend = now;
       }
     },
+    onDeleteElement: (data) => {
+      send({ type: 'deleteElement', ...data });
+      updateCurrentThumbnail();
+    },
   });
 
   // --- Text input handling ---
@@ -309,6 +313,11 @@
       colorButtons.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       wb.currentColor = btn.dataset.color;
+      // Recolor selected element
+      if (wb.selectedElements.size > 0) {
+        wb.recolorSelected(btn.dataset.color);
+        updateCurrentThumbnail();
+      }
     });
   });
 
@@ -398,6 +407,15 @@
         }
       }
     }
+  });
+
+  // --- Sync button ---
+  document.getElementById('btn-sync').addEventListener('click', () => {
+    send({ type: 'resync' });
+    const toastEl = document.getElementById('share-toast');
+    toastEl.textContent = 'Viewers synced';
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 2000);
   });
 
   // --- Share button ---

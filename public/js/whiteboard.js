@@ -22,13 +22,10 @@ class Whiteboard {
     this.currentFontSize = 24;
 
     // Selection & drag state
-    this.selectedElement = null;
+    this.selectedElements = new Set();
     this._isDragging = false;
     this._dragStartNorm = null;
-    this._dragOriginal = null;
-    this._lastTapTime = 0;
-    this._lastTapX = 0;
-    this._lastTapY = 0;
+    this._dragOriginals = null; // Map<element, {original position data}>
 
     // Callbacks
     this.onStrokeComplete = options.onStrokeComplete || null;
@@ -36,6 +33,7 @@ class Whiteboard {
     this.onTextPlacement = options.onTextPlacement || null;
     this.onMoveComplete = options.onMoveComplete || null;
     this.onMoveLive = options.onMoveLive || null;
+    this.onDeleteElement = options.onDeleteElement || null;
 
     // Live stroke from remote (for viewer)
     this.liveStroke = null;
@@ -118,10 +116,16 @@ class Whiteboard {
 
     this.canvas.style.touchAction = 'none';
 
-    // Escape to deselect
+    // Escape to deselect, Delete/Backspace to remove selected
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.selectedElement) {
-        this.deselectElement();
+      if (this.selectedElements.size === 0) return;
+      if (e.key === 'Escape') {
+        this.deselectAll();
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+        e.preventDefault();
+        this.deleteSelected();
       }
     });
   }
@@ -139,20 +143,12 @@ class Whiteboard {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     const pt = this._getCanvasPoint(e);
-    const now = Date.now();
 
-    // --- Double-click detection (any tool) ---
-    const timeDelta = now - this._lastTapTime;
-    const distDelta = Math.hypot(pt.x - this._lastTapX, pt.y - this._lastTapY);
-    this._lastTapTime = now;
-    this._lastTapX = pt.x;
-    this._lastTapY = pt.y;
-
-    if (timeDelta < 400 && distDelta < 15) {
-      const hit = this.hitTest(pt.x, pt.y);
-      if (hit) {
-        this.selectElement(hit);
-        this._lastTapTime = 0; // Reset to prevent triple-click
+    // --- Delete button click (when something is selected) ---
+    if (this.selectedElements.size > 0 && this._deleteButtonPos) {
+      const db = this._deleteButtonPos;
+      if (Math.hypot(pt.x - db.x, pt.y - db.y) <= db.r + 4) {
+        this.deleteSelected();
         return;
       }
     }
@@ -161,19 +157,26 @@ class Whiteboard {
     if (this.currentTool === 'select') {
       const hit = this.hitTest(pt.x, pt.y);
       if (hit) {
-        this.selectElement(hit);
-        // Start drag
+        // If already selected, just start dragging all selected
+        if (!this.selectedElements.has(hit)) {
+          // Add to selection (additive)
+          this.selectedElements.add(hit);
+          this.redraw();
+        }
+        // Start drag for all selected elements
         this._isDragging = true;
         this._dragStartNorm = this._normalizePoint(pt.x, pt.y);
-        // Deep-copy original positions
-        if (hit.tool === 'text') {
-          this._dragOriginal = { x: hit.x, y: hit.y };
-        } else {
-          this._dragOriginal = { points: hit.points.map((p) => ({ ...p })) };
+        this._dragOriginals = new Map();
+        for (const el of this.selectedElements) {
+          if (el.tool === 'text') {
+            this._dragOriginals.set(el, { x: el.x, y: el.y });
+          } else if (el.points) {
+            this._dragOriginals.set(el, { points: el.points.map((p) => ({ ...p })) });
+          }
         }
         this.canvas.style.cursor = 'grabbing';
       } else {
-        this.deselectElement();
+        this.deselectAll();
       }
       return;
     }
@@ -187,7 +190,7 @@ class Whiteboard {
     }
 
     // --- Drawing tools ---
-    this.deselectElement();
+    this.deselectAll();
     this.isDrawing = true;
     const normalized = this._normalizePoint(pt.x, pt.y, pt.pressure);
 
@@ -205,34 +208,40 @@ class Whiteboard {
   }
 
   _onPointerMove(e) {
-    // --- Drag move ---
-    if (this._isDragging && this.selectedElement) {
+    // --- Drag move (all selected elements) ---
+    if (this._isDragging && this.selectedElements.size > 0) {
       const pt = this._getCanvasPoint(e);
       const current = this._normalizePoint(pt.x, pt.y);
       const dx = current.x - this._dragStartNorm.x;
       const dy = current.y - this._dragStartNorm.y;
 
-      if (this.selectedElement.tool === 'text') {
-        this.selectedElement.x = this._dragOriginal.x + dx;
-        this.selectedElement.y = this._dragOriginal.y + dy;
-      } else if (this.selectedElement.points) {
-        for (let i = 0; i < this.selectedElement.points.length; i++) {
-          this.selectedElement.points[i] = {
-            ...this._dragOriginal.points[i],
-            x: this._dragOriginal.points[i].x + dx,
-            y: this._dragOriginal.points[i].y + dy,
-          };
+      for (const el of this.selectedElements) {
+        const orig = this._dragOriginals.get(el);
+        if (!orig) continue;
+        if (el.tool === 'text') {
+          el.x = orig.x + dx;
+          el.y = orig.y + dy;
+        } else if (el.points) {
+          for (let i = 0; i < el.points.length; i++) {
+            el.points[i] = {
+              ...orig.points[i],
+              x: orig.points[i].x + dx,
+              y: orig.points[i].y + dy,
+            };
+          }
         }
       }
 
       this.redraw();
 
       if (this.onMoveLive) {
-        this.onMoveLive({
-          boardId: this.currentBoardId,
-          elementId: this.selectedElement.id,
-          element: this._cloneElement(this.selectedElement),
-        });
+        for (const el of this.selectedElements) {
+          this.onMoveLive({
+            boardId: this.currentBoardId,
+            elementId: el.id,
+            element: this._cloneElement(el),
+          });
+        }
       }
       return;
     }
@@ -262,16 +271,18 @@ class Whiteboard {
 
   _onPointerUp(e) {
     // --- Drag end ---
-    if (this._isDragging && this.selectedElement) {
+    if (this._isDragging && this.selectedElements.size > 0) {
       this._isDragging = false;
       this.canvas.style.cursor = this.currentTool === 'select' ? 'default' : 'crosshair';
 
       if (this.onMoveComplete) {
-        this.onMoveComplete({
-          boardId: this.currentBoardId,
-          elementId: this.selectedElement.id,
-          element: this._cloneElement(this.selectedElement),
-        });
+        for (const el of this.selectedElements) {
+          this.onMoveComplete({
+            boardId: this.currentBoardId,
+            elementId: el.id,
+            element: this._cloneElement(el),
+          });
+        }
       }
 
       const board = this.boards.get(this.currentBoardId);
@@ -430,48 +441,104 @@ class Whiteboard {
   }
 
   // --- Selection ---
-  selectElement(element) {
-    this.selectedElement = element;
-    this.redraw();
-  }
-
-  deselectElement() {
-    if (!this.selectedElement) return;
-    this.selectedElement = null;
+  deselectAll() {
+    if (this.selectedElements.size === 0) return;
+    this.selectedElements.clear();
     this._isDragging = false;
     this.redraw();
   }
 
-  _renderSelectionIndicator() {
-    if (!this.selectedElement) return;
+  // Legacy alias used by presenter.js tool switching
+  deselectElement() { this.deselectAll(); }
 
-    const bounds = this._getElementBounds(this.selectedElement);
+  deleteSelected() {
+    if (this.selectedElements.size === 0) return;
+    const board = this.boards.get(this.currentBoardId);
+    if (!board) return;
+    for (const el of this.selectedElements) {
+      const idx = board.strokes.findIndex((s) => s.id === el.id);
+      if (idx !== -1) {
+        board.strokes.splice(idx, 1);
+        if (this.onDeleteElement) {
+          this.onDeleteElement({ boardId: this.currentBoardId, elementId: el.id });
+        }
+      }
+    }
+    board.undone = [];
+    this.selectedElements.clear();
+    this._isDragging = false;
+    this.redraw();
+  }
+
+  recolorSelected(newColor) {
+    if (this.selectedElements.size === 0) return;
+    for (const el of this.selectedElements) {
+      el.color = newColor;
+      if (this.onMoveComplete) {
+        this.onMoveComplete({
+          boardId: this.currentBoardId,
+          elementId: el.id,
+          element: this._cloneElement(el),
+        });
+      }
+    }
+    this.redraw();
+  }
+
+  _renderSelectionIndicator() {
+    if (this.selectedElements.size === 0) return;
+
     const ctx = this.ctx;
     const pad = 8;
-    const x = bounds.x - pad;
-    const y = bounds.y - pad;
-    const w = bounds.width + pad * 2;
-    const h = bounds.height + pad * 2;
+
+    // Track combined bounds for the delete button
+    let allMinX = Infinity, allMinY = Infinity, allMaxX = -Infinity, allMaxY = -Infinity;
 
     ctx.save();
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(x, y, w, h);
-    ctx.setLineDash([]);
+    for (const el of this.selectedElements) {
+      const bounds = this._getElementBounds(el);
+      const x = bounds.x - pad;
+      const y = bounds.y - pad;
+      const w = bounds.width + pad * 2;
+      const h = bounds.height + pad * 2;
 
-    // Corner handles
-    const handleSize = 6;
-    ctx.fillStyle = '#3b82f6';
-    const corners = [
-      [x, y],
-      [x + w, y],
-      [x, y + h],
-      [x + w, y + h],
-    ];
-    for (const [cx, cy] of corners) {
-      ctx.fillRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
+      allMinX = Math.min(allMinX, x);
+      allMinY = Math.min(allMinY, y);
+      allMaxX = Math.max(allMaxX, x + w);
+      allMaxY = Math.max(allMaxY, y + h);
+
+      // Dashed box per element
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+
+      // Corner handles
+      const hs = 6;
+      ctx.fillStyle = '#3b82f6';
+      for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
+      }
     }
+
+    // One delete button at the top-right of the combined selection
+    const btnR = 10;
+    const btnX = allMaxX + 4;
+    const btnY = allMinY - 4;
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(btnX, btnY, btnR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(btnX - 4, btnY - 4);
+    ctx.lineTo(btnX + 4, btnY + 4);
+    ctx.moveTo(btnX + 4, btnY - 4);
+    ctx.lineTo(btnX - 4, btnY + 4);
+    ctx.stroke();
+    this._deleteButtonPos = { x: btnX, y: btnY, r: btnR };
 
     ctx.restore();
   }
@@ -575,7 +642,7 @@ class Whiteboard {
     }
     this.currentBoardId = boardId;
     this.liveStroke = null;
-    this.selectedElement = null;
+    this.selectedElements.clear();
     this.redraw();
   }
 
@@ -708,6 +775,17 @@ class Whiteboard {
     const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
     if (idx !== -1) {
       board.strokes[idx] = msg.element;
+      if (msg.boardId === this.currentBoardId) this.redraw();
+    }
+  }
+
+  applyDelete(msg) {
+    const board = this.boards.get(msg.boardId);
+    if (!board) return;
+    const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
+    if (idx !== -1) {
+      board.strokes.splice(idx, 1);
+      board.undone = [];
       if (msg.boardId === this.currentBoardId) this.redraw();
     }
   }

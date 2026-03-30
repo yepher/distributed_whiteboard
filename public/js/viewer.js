@@ -109,6 +109,10 @@
         wb.applyMoveLive(msg);
         break;
 
+      case 'deleteElement':
+        wb.applyDelete(msg);
+        break;
+
       case 'undo':
         wb.remoteUndo(msg.boardId);
         break;

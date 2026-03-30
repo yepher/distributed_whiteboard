@@ -384,12 +384,11 @@ body.viewer #whiteboard {
   letter-spacing: 0.5px;
 }
 
-.share-btn {
+.share-btn, .sync-btn {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #3b82f6;
   border: none;
   border-radius: 14px;
   color: #ffffff;
@@ -399,11 +398,14 @@ body.viewer #whiteboard {
   transition: background 0.15s;
 }
 
-.share-btn:hover {
-  background: #2563eb;
+.share-btn { background: #3b82f6; }
+.share-btn:hover { background: #2563eb; }
+
+.sync-btn { background: #6b7280; }
+.sync-btn:hover { background: #4b5563;
 }
 
-.share-btn svg {
+.share-btn svg, .sync-btn svg {
   width: 14px;
   height: 14px;
 }
