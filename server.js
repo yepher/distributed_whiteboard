@@ -3,6 +3,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,47 +23,74 @@ app.get('/viewer', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
 });
 
-// Board state (in-memory)
-const state = {
-  boards: [{ id: 0, strokes: [], undone: [] }],
-  currentBoardId: 0,
-  theme: 'dark',
-};
+// --- Session (channel) state ---
+// Each session is independent: its own boards, theme, and connected clients
+const sessions = new Map();
 
-// Track connected clients
-const clients = { presenters: new Set(), viewers: new Set() };
+function getSession(sessionId) {
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, {
+      boards: [{ id: 0, strokes: [], undone: [] }],
+      currentBoardId: 0,
+      theme: 'dark',
+      clients: { presenters: new Set(), viewers: new Set() },
+    });
+  }
+  return sessions.get(sessionId);
+}
 
-function broadcast(data, exclude = null) {
+function broadcast(sessionId, data, exclude = null) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
   const msg = JSON.stringify(data);
-  for (const viewer of clients.viewers) {
+  for (const viewer of session.clients.viewers) {
     if (viewer !== exclude && viewer.readyState === 1) {
       viewer.send(msg);
     }
   }
 }
 
-function getBoard(id) {
-  return state.boards.find((b) => b.id === id);
+function getBoard(session, id) {
+  return session.boards.find((b) => b.id === id);
+}
+
+// Clean up empty sessions after 30 minutes
+function scheduleCleanup(sessionId) {
+  setTimeout(() => {
+    const session = sessions.get(sessionId);
+    if (session && session.clients.presenters.size === 0 && session.clients.viewers.size === 0) {
+      sessions.delete(sessionId);
+    }
+  }, 30 * 60 * 1000);
 }
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const role = url.searchParams.get('role') || 'viewer';
+  const sessionId = url.searchParams.get('session');
+
+  if (!sessionId) {
+    ws.close(4000, 'session parameter required');
+    return;
+  }
+
+  const session = getSession(sessionId);
+  ws._sessionId = sessionId;
 
   if (role === 'presenter') {
-    clients.presenters.add(ws);
+    session.clients.presenters.add(ws);
   } else {
-    clients.viewers.add(ws);
+    session.clients.viewers.add(ws);
     // Send full state to new viewer
     ws.send(
       JSON.stringify({
         type: 'fullState',
-        boards: state.boards.map((b) => ({
+        boards: session.boards.map((b) => ({
           id: b.id,
           strokes: b.strokes,
         })),
-        currentBoardId: state.currentBoardId,
-        theme: state.theme,
+        currentBoardId: session.currentBoardId,
+        theme: session.theme,
       })
     );
   }
@@ -75,9 +103,12 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    const sess = sessions.get(ws._sessionId);
+    if (!sess) return;
+
     switch (msg.type) {
       case 'draw': {
-        const board = getBoard(msg.boardId);
+        const board = getBoard(sess, msg.boardId);
         if (board) {
           let element;
           if (msg.tool === 'text') {
@@ -103,39 +134,39 @@ wss.on('connection', (ws, req) => {
           }
           board.strokes.push(element);
           board.undone = [];
-          broadcast(msg);
+          broadcast(ws._sessionId, msg);
         }
         break;
       }
 
       case 'drawLive': {
-        broadcast(msg);
+        broadcast(ws._sessionId, msg);
         break;
       }
 
       case 'moveElement': {
-        const board = getBoard(msg.boardId);
+        const board = getBoard(sess, msg.boardId);
         if (board && msg.elementId && msg.element) {
           const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
           if (idx !== -1) {
             board.strokes[idx] = msg.element;
             board.undone = [];
-            broadcast(msg);
+            broadcast(ws._sessionId, msg);
           }
         }
         break;
       }
 
       case 'moveLive': {
-        broadcast(msg);
+        broadcast(ws._sessionId, msg);
         break;
       }
 
       case 'undo': {
-        const board = getBoard(msg.boardId);
+        const board = getBoard(sess, msg.boardId);
         if (board && board.strokes.length > 0) {
           board.undone.push(board.strokes.pop());
-          broadcast({
+          broadcast(ws._sessionId, {
             type: 'undo',
             boardId: msg.boardId,
           });
@@ -144,10 +175,10 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'redo': {
-        const board = getBoard(msg.boardId);
+        const board = getBoard(sess, msg.boardId);
         if (board && board.undone.length > 0) {
           board.strokes.push(board.undone.pop());
-          broadcast({
+          broadcast(ws._sessionId, {
             type: 'redo',
             boardId: msg.boardId,
             stroke: board.strokes[board.strokes.length - 1],
@@ -157,71 +188,76 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'clear': {
-        const board = getBoard(msg.boardId);
+        const board = getBoard(sess, msg.boardId);
         if (board) {
           board.strokes = [];
           board.undone = [];
-          broadcast({ type: 'clear', boardId: msg.boardId });
+          broadcast(ws._sessionId, { type: 'clear', boardId: msg.boardId });
         }
         break;
       }
 
       case 'switchBoard': {
-        state.currentBoardId = msg.boardId;
-        broadcast({ type: 'switchBoard', boardId: msg.boardId });
+        sess.currentBoardId = msg.boardId;
+        broadcast(ws._sessionId, { type: 'switchBoard', boardId: msg.boardId });
         break;
       }
 
       case 'addBoard': {
         const newId =
-          state.boards.length > 0
-            ? Math.max(...state.boards.map((b) => b.id)) + 1
+          sess.boards.length > 0
+            ? Math.max(...sess.boards.map((b) => b.id)) + 1
             : 0;
-        state.boards.push({ id: newId, strokes: [], undone: [] });
-        state.currentBoardId = newId;
-        broadcast({
+        sess.boards.push({ id: newId, strokes: [], undone: [] });
+        sess.currentBoardId = newId;
+        broadcast(ws._sessionId, {
           type: 'addBoard',
           boardId: newId,
-          totalBoards: state.boards.length,
+          totalBoards: sess.boards.length,
         });
-        // Also tell presenter the new board id
         ws.send(
           JSON.stringify({
             type: 'boardCreated',
             boardId: newId,
-            totalBoards: state.boards.length,
+            totalBoards: sess.boards.length,
           })
         );
         break;
       }
 
       case 'deleteBoard': {
-        if (state.boards.length <= 1) break;
-        const idx = state.boards.findIndex((b) => b.id === msg.boardId);
+        if (sess.boards.length <= 1) break;
+        const idx = sess.boards.findIndex((b) => b.id === msg.boardId);
         if (idx === -1) break;
-        state.boards.splice(idx, 1);
-        if (state.currentBoardId === msg.boardId) {
-          state.currentBoardId = state.boards[Math.min(idx, state.boards.length - 1)].id;
+        sess.boards.splice(idx, 1);
+        if (sess.currentBoardId === msg.boardId) {
+          sess.currentBoardId = sess.boards[Math.min(idx, sess.boards.length - 1)].id;
         }
-        broadcast({
+        broadcast(ws._sessionId, {
           type: 'deleteBoard',
           boardId: msg.boardId,
-          currentBoardId: state.currentBoardId,
+          currentBoardId: sess.currentBoardId,
         });
         break;
       }
 
       case 'themeChange': {
-        state.theme = msg.theme;
-        broadcast({ type: 'themeChange', theme: msg.theme });
+        sess.theme = msg.theme;
+        broadcast(ws._sessionId, { type: 'themeChange', theme: msg.theme });
         break;
       }
     }
   });
 
   ws.on('close', () => {
-    clients.presenters.delete(ws);
-    clients.viewers.delete(ws);
+    const sess = sessions.get(ws._sessionId);
+    if (sess) {
+      sess.clients.presenters.delete(ws);
+      sess.clients.viewers.delete(ws);
+      if (sess.clients.presenters.size === 0 && sess.clients.viewers.size === 0) {
+        scheduleCleanup(ws._sessionId);
+      }
+    }
   });
 });
 

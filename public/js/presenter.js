@@ -2,9 +2,29 @@
  * Presenter — handles tools, board management, and WebSocket communication
  */
 (function () {
+  // --- Session ID ---
+  function generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback for older browsers
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+
+  const params = new URLSearchParams(location.search);
+  let sessionId = params.get('session');
+  if (!sessionId) {
+    sessionId = generateUUID();
+    params.set('session', sessionId);
+    history.replaceState(null, '', '?' + params.toString());
+  }
+
   // --- WebSocket setup ---
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${location.host}?role=presenter`);
+  const ws = new WebSocket(`${protocol}//${location.host}?role=presenter&session=${sessionId}`);
   const statusEl = document.getElementById('connection-status');
 
   ws.onopen = () => {
@@ -379,6 +399,72 @@
       }
     }
   });
+
+  // --- Share button ---
+  const btnShare = document.getElementById('btn-share');
+  const toastEl = document.getElementById('share-toast');
+
+  function getViewerURL() {
+    return `${location.protocol}//${location.host}/viewer?session=${sessionId}`;
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 2500);
+  }
+
+  function copyToClipboard(text) {
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+    }
+    // Fallback: temporary textarea + execCommand
+    return new Promise((resolve) => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        resolve(document.execCommand('copy'));
+      } catch {
+        resolve(false);
+      }
+      document.body.removeChild(ta);
+    });
+  }
+
+  btnShare.addEventListener('click', async () => {
+    const url = getViewerURL();
+
+    // Use native share sheet on iPad/mobile if available
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Whiteboard Viewer', url });
+        return;
+      } catch {
+        // User cancelled or share failed — fall through to copy
+      }
+    }
+
+    const copied = await copyToClipboard(url);
+    if (copied) {
+      showToast('Viewer link copied!');
+    } else {
+      // Last resort
+      prompt('Share this viewer link:', url);
+    }
+  });
+
+  // Show session ID in the session indicator
+  const sessionIndicator = document.getElementById('session-id');
+  if (sessionIndicator) {
+    sessionIndicator.textContent = sessionId.slice(0, 8);
+    sessionIndicator.title = sessionId;
+  }
 
   // Initial render
   renderBoardList();

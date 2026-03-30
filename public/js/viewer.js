@@ -2,8 +2,16 @@
  * Viewer — read-only canvas that receives strokes via WebSocket
  */
 (function () {
+  // --- Session ID ---
+  const params = new URLSearchParams(location.search);
+  const sessionId = params.get('session');
+  if (!sessionId) {
+    document.body.innerHTML = '<div style="color:#888;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h2 style="color:#fff;margin-bottom:8px">No session ID</h2><p>Open a viewer link shared by a presenter.</p></div></div>';
+    return;
+  }
+
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${location.host}?role=viewer`);
+  const ws = new WebSocket(`${protocol}//${location.host}?role=viewer&session=${sessionId}`);
   const statusEl = document.getElementById('connection-status');
   const indicatorEl = document.getElementById('board-indicator');
 
