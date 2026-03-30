@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whiteboard — Viewer</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="viewer theme-dark">
+
+  <!-- Main canvas area (full screen for viewer) -->
+  <main id="canvas-area" class="viewer-canvas">
+    <canvas id="whiteboard"></canvas>
+  </main>
+
+  <!-- Board indicator -->
+  <div id="board-indicator">Board 1</div>
+
+  <!-- Connection status -->
+  <div id="connection-status" class="disconnected">Connecting...</div>
+
+  <script src="/js/whiteboard.js"></script>
+  <script src="/js/viewer.js"></script>
+</body>
+</html>

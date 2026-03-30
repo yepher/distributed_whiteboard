@@ -1,0 +1,362 @@
+/* === Reset & Base === */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* === Theme colors === */
+.theme-dark {
+  --bg: #000000;
+  --sidebar-bg: #111111;
+  --toolbar-bg: rgba(30, 30, 30, 0.95);
+  --text: #ffffff;
+  --text-muted: #888888;
+  --border: #333333;
+  --thumb-bg: #1a1a1a;
+  --active-border: #3b82f6;
+  --btn-hover: #2a2a2a;
+}
+
+.theme-light {
+  --bg: #ffffff;
+  --sidebar-bg: #f0f0f0;
+  --toolbar-bg: rgba(240, 240, 240, 0.95);
+  --text: #000000;
+  --text-muted: #666666;
+  --border: #cccccc;
+  --thumb-bg: #e0e0e0;
+  --active-border: #3b82f6;
+  --btn-hover: #d0d0d0;
+}
+
+/* === Layout === */
+body.presenter {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  grid-template-rows: 1fr auto;
+  background: var(--bg);
+}
+
+body.viewer {
+  display: flex;
+  background: var(--bg);
+}
+
+/* === Sidebar (presenter only) === */
+#sidebar {
+  grid-row: 1 / 3;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  gap: 8px;
+  z-index: 10;
+}
+
+#sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+#sidebar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+#board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.board-item {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.board-item:hover {
+  border-color: var(--text-muted);
+}
+
+.board-item.active {
+  border-color: var(--active-border);
+  box-shadow: 0 0 0 1px var(--active-border);
+}
+
+.board-thumb {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--thumb-bg);
+  aspect-ratio: 3/2;
+}
+
+.board-label {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+#add-board {
+  width: 100%;
+  height: 40px;
+  background: var(--thumb-bg);
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+#add-board:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+  background: var(--btn-hover);
+}
+
+/* === Canvas area === */
+#canvas-area {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.viewer-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+#whiteboard {
+  display: block;
+  cursor: crosshair;
+}
+
+body.viewer #whiteboard {
+  cursor: default;
+}
+
+/* === Bottom toolbar (presenter only) === */
+#toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--toolbar-bg);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 10;
+  flex-wrap: wrap;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.tool-group + .tool-group {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+.tool-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tool-btn:hover {
+  background: var(--btn-hover);
+}
+
+.tool-btn.active {
+  border-color: var(--active-border);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.tool-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* === Color buttons === */
+.color-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.color-btn:hover {
+  transform: scale(1.15);
+}
+
+.color-btn.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--active-border);
+  transform: scale(1.15);
+}
+
+/* === Line width slider === */
+#line-width {
+  width: 80px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+
+#line-width::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+  border: 2px solid var(--active-border);
+}
+
+/* === Board indicator (viewer) === */
+#board-indicator {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.theme-light #board-indicator {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+#board-indicator.show {
+  opacity: 1;
+}
+
+/* === Connection status === */
+#connection-status {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 100;
+  transition: opacity 0.5s;
+}
+
+#connection-status.connected {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+#connection-status.disconnected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+#connection-status.fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* === iPad / touch optimizations === */
+@media (pointer: coarse) {
+  .tool-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .color-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  #toolbar {
+    padding: 10px 16px;
+    gap: 12px;
+  }
+
+  #line-width {
+    width: 100px;
+  }
+}
+
+/* === Small screen adjustments === */
+@media (max-width: 600px) {
+  body.presenter {
+    grid-template-columns: 70px 1fr;
+  }
+
+  #sidebar {
+    padding: 4px;
+  }
+
+  #toolbar {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .tool-group + .tool-group {
+    padding-left: 8px;
+  }
+}
+
+/* Safe area for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  #toolbar {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  #sidebar {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+}

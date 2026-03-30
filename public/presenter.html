@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Whiteboard — Presenter</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="presenter theme-dark">
+
+  <!-- Left sidebar: board thumbnails -->
+  <aside id="sidebar">
+    <div id="board-list"></div>
+    <button id="add-board" title="Add board">+</button>
+  </aside>
+
+  <!-- Main canvas area -->
+  <main id="canvas-area">
+    <canvas id="whiteboard"></canvas>
+  </main>
+
+  <!-- Bottom toolbar -->
+  <footer id="toolbar">
+    <div class="tool-group" id="history-group">
+      <button id="btn-undo" class="tool-btn" title="Undo">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12.5 8C9.85 8 7.45 9 5.6 10.6L2 7v9h9l-3.6-3.6C8.9 11.1 10.6 10.5 12.5 10.5c3.5 0 6.5 2.3 7.5 5.5l2.2-.8C20.8 11.2 17 8 12.5 8z" fill="currentColor"/></svg>
+      </button>
+      <button id="btn-redo" class="tool-btn" title="Redo">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M11.5 8c2.65 0 5.05 1 6.9 2.6L22 7v9h-9l3.6-3.6C15.1 11.1 13.4 10.5 11.5 10.5c-3.5 0-6.5 2.3-7.5 5.5L1.8 15.2C3.2 11.2 7 8 11.5 8z" fill="currentColor"/></svg>
+      </button>
+    </div>
+
+    <div class="tool-group" id="tools-group">
+      <button class="tool-btn active" data-tool="pen" title="Pen">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="marker" title="Marker">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="highlighter" title="Highlighter">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M11 21h-1l-7-7 3-3 5 5V21zm6.71-14.71l-3-3a1 1 0 00-1.42 0L10 6.59l7.41 7.41 2.3-2.29a1 1 0 000-1.42z" fill="currentColor" opacity="0.6"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="eraser" title="Eraser">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M15.14 3c-.51 0-1.02.2-1.41.59L2.59 14.73a2 2 0 000 2.83l2.83 2.83A2 2 0 007 20.93h5.17a2 2 0 001.42-.59l7.82-7.82a2 2 0 000-2.83l-4.86-4.86A2 2 0 0015.14 3zM7 18.93l-2.83-2.83L10.59 9.68l5.66 5.66-3.41 3.41H7.17z" fill="currentColor"/></svg>
+      </button>
+    </div>
+
+    <div class="tool-group" id="size-group">
+      <input type="range" id="line-width" min="1" max="20" value="3" title="Line width">
+    </div>
+
+    <div class="tool-group" id="colors-group">
+      <button class="color-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+      <button class="color-btn active" data-color="#00ff00" style="background:#00ff00" title="Green"></button>
+      <button class="color-btn" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
+      <button class="color-btn" data-color="#ef4444" style="background:#ef4444" title="Red"></button>
+      <button class="color-btn" data-color="#eab308" style="background:#eab308" title="Yellow"></button>
+      <button class="color-btn" data-color="#a855f7" style="background:#a855f7" title="Purple"></button>
+      <button class="color-btn" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+      <button class="color-btn" data-color="#ec4899" style="background:#ec4899" title="Pink"></button>
+    </div>
+
+    <div class="tool-group" id="actions-group">
+      <button id="btn-clear" class="tool-btn" title="Clear board">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg>
+      </button>
+      <button id="btn-theme" class="tool-btn" title="Toggle dark/light">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 01-4.4 2.26 5.4 5.4 0 01-3.14-9.8A9.06 9.06 0 0012 3z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Connection status -->
+  <div id="connection-status" class="disconnected">Connecting...</div>
+
+  <script src="/js/whiteboard.js"></script>
+  <script src="/js/presenter.js"></script>
+</body>
+</html>
