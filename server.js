@@ -82,6 +82,7 @@ wss.on('connection', (ws, req) => {
           let element;
           if (msg.tool === 'text') {
             element = {
+              id: msg.id || Date.now().toString(36),
               tool: 'text',
               x: msg.x,
               y: msg.y,
@@ -92,6 +93,7 @@ wss.on('connection', (ws, req) => {
             };
           } else {
             element = {
+              id: msg.id || Date.now().toString(36),
               points: msg.points,
               color: msg.color,
               width: msg.width,
@@ -107,7 +109,24 @@ wss.on('connection', (ws, req) => {
       }
 
       case 'drawLive': {
-        // Live stroke preview — forward to viewers but don't persist
+        broadcast(msg);
+        break;
+      }
+
+      case 'moveElement': {
+        const board = getBoard(msg.boardId);
+        if (board && msg.elementId && msg.element) {
+          const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
+          if (idx !== -1) {
+            board.strokes[idx] = msg.element;
+            board.undone = [];
+            broadcast(msg);
+          }
+        }
+        break;
+      }
+
+      case 'moveLive': {
         broadcast(msg);
         break;
       }

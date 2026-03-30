@@ -162,6 +162,10 @@ body.viewer #whiteboard {
   cursor: default;
 }
 
+#whiteboard.tool-select {
+  cursor: default;
+}
+
 /* === Text input overlay === */
 .canvas-text-input {
   position: absolute;

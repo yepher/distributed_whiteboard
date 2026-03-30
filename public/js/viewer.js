@@ -93,6 +93,14 @@
         wb.setLiveStroke(msg);
         break;
 
+      case 'moveElement':
+        wb.applyMove(msg);
+        break;
+
+      case 'moveLive':
+        wb.applyMoveLive(msg);
+        break;
+
       case 'undo':
         wb.remoteUndo(msg.boardId);
         break;

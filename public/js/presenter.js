@@ -55,6 +55,17 @@
     onTextPlacement: (x, y) => {
       placeTextInput(x, y);
     },
+    onMoveComplete: (moveData) => {
+      send({ type: 'moveElement', ...moveData });
+      updateCurrentThumbnail();
+    },
+    onMoveLive: (moveData) => {
+      const now = Date.now();
+      if (now - lastLiveSend > LIVE_INTERVAL) {
+        send({ type: 'moveLive', ...moveData });
+        lastLiveSend = now;
+      }
+    },
   });
 
   // --- Text input handling ---
@@ -121,6 +132,7 @@
     const ny = y / rect.height;
 
     const textElement = {
+      id: wb._generateId(),
       tool: 'text',
       x: nx,
       y: ny,
@@ -265,6 +277,8 @@
       toolButtons.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       wb.currentTool = btn.dataset.tool;
+      wb.deselectElement();
+      canvas.classList.toggle('tool-select', btn.dataset.tool === 'select');
     });
   });
 
