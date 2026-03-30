@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Whiteboard — Presenter</title>
   <link rel="stylesheet" href="/css/styles.css">
 </head>
@@ -43,6 +45,9 @@
       <button class="tool-btn" data-tool="eraser" title="Eraser">
         <svg viewBox="0 0 24 24" width="24" height="24"><path d="M15.14 3c-.51 0-1.02.2-1.41.59L2.59 14.73a2 2 0 000 2.83l2.83 2.83A2 2 0 007 20.93h5.17a2 2 0 001.42-.59l7.82-7.82a2 2 0 000-2.83l-4.86-4.86A2 2 0 0015.14 3zM7 18.93l-2.83-2.83L10.59 9.68l5.66 5.66-3.41 3.41H7.17z" fill="currentColor"/></svg>
       </button>
+      <button class="tool-btn" data-tool="text" title="Text">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M5 4v3h5.5v12h3V7H19V4H5z" fill="currentColor"/></svg>
+      </button>
     </div>
 
     <div class="tool-group" id="size-group">
@@ -50,14 +55,14 @@
     </div>
 
     <div class="tool-group" id="colors-group">
+      <button class="color-btn active" data-color="#1FD5F9" style="background:#1FD5F9" title="LK Cyan"></button>
+      <button class="color-btn" data-color="#002CF2" style="background:#002CF2" title="LK Blue"></button>
       <button class="color-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
-      <button class="color-btn active" data-color="#00ff00" style="background:#00ff00" title="Green"></button>
-      <button class="color-btn" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
       <button class="color-btn" data-color="#ef4444" style="background:#ef4444" title="Red"></button>
+      <button class="color-btn" data-color="#22c55e" style="background:#22c55e" title="Green"></button>
       <button class="color-btn" data-color="#eab308" style="background:#eab308" title="Yellow"></button>
-      <button class="color-btn" data-color="#a855f7" style="background:#a855f7" title="Purple"></button>
       <button class="color-btn" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-      <button class="color-btn" data-color="#ec4899" style="background:#ec4899" title="Pink"></button>
+      <button class="color-btn" data-color="#a855f7" style="background:#a855f7" title="Purple"></button>
     </div>
 
     <div class="tool-group" id="actions-group">

@@ -79,14 +79,27 @@ wss.on('connection', (ws, req) => {
       case 'draw': {
         const board = getBoard(msg.boardId);
         if (board) {
-          const stroke = {
-            points: msg.points,
-            color: msg.color,
-            width: msg.width,
-            tool: msg.tool,
-            opacity: msg.opacity,
-          };
-          board.strokes.push(stroke);
+          let element;
+          if (msg.tool === 'text') {
+            element = {
+              tool: 'text',
+              x: msg.x,
+              y: msg.y,
+              text: msg.text,
+              color: msg.color,
+              fontSize: msg.fontSize,
+              opacity: msg.opacity || 1,
+            };
+          } else {
+            element = {
+              points: msg.points,
+              color: msg.color,
+              width: msg.width,
+              tool: msg.tool,
+              opacity: msg.opacity,
+            };
+          }
+          board.strokes.push(element);
           board.undone = [];
           broadcast(msg);
         }

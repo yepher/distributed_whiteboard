@@ -15,12 +15,16 @@ class Whiteboard {
     this.isDrawing = false;
     this.currentStroke = null;
     this.currentTool = 'pen';
-    this.currentColor = '#00ff00';
+    this.currentColor = '#1FD5F9';
     this.currentWidth = 3;
+
+    // Text state
+    this.currentFontSize = 24;
 
     // Callbacks
     this.onStrokeComplete = options.onStrokeComplete || null;
     this.onStrokeLive = options.onStrokeLive || null;
+    this.onTextPlacement = options.onTextPlacement || null;
 
     // Live stroke from remote (for viewer)
     this.liveStroke = null;
@@ -81,11 +85,26 @@ class Whiteboard {
 
   // --- Pointer events (presenter only) ---
   _setupPointerEvents() {
-    this.canvas.addEventListener('pointerdown', (e) => this._onPointerDown(e));
-    this.canvas.addEventListener('pointermove', (e) => this._onPointerMove(e));
-    this.canvas.addEventListener('pointerup', (e) => this._onPointerUp(e));
+    this.canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this._onPointerDown(e);
+    });
+    this.canvas.addEventListener('pointermove', (e) => {
+      e.preventDefault();
+      this._onPointerMove(e);
+    });
+    this.canvas.addEventListener('pointerup', (e) => {
+      e.preventDefault();
+      this._onPointerUp(e);
+    });
     this.canvas.addEventListener('pointerleave', (e) => this._onPointerUp(e));
     this.canvas.addEventListener('pointercancel', (e) => this._onPointerUp(e));
+
+    // Prevent touch gestures from being intercepted by the browser
+    // (critical for iPad fullscreen — prevents swipe-to-exit)
+    this.canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    this.canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    this.canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
 
     // Prevent default touch behavior (scrolling, zooming)
     this.canvas.style.touchAction = 'none';
@@ -103,6 +122,15 @@ class Whiteboard {
   _onPointerDown(e) {
     // Only respond to pen/touch/primary mouse
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // Text tool: notify presenter to place a text input, don't draw
+    if (this.currentTool === 'text') {
+      const pt = this._getCanvasPoint(e);
+      if (this.onTextPlacement) {
+        this.onTextPlacement(pt.x, pt.y);
+      }
+      return;
+    }
 
     this.isDrawing = true;
     const pt = this._getCanvasPoint(e);
@@ -210,11 +238,39 @@ class Whiteboard {
   }
 
   // --- Rendering ---
+  _renderElement(element) {
+    if (element.tool === 'text') {
+      return this._renderText(element);
+    }
+    return this._renderStroke(element);
+  }
+
+  _renderText(element) {
+    const ctx = this.ctx;
+    const x = element.x * this.logicalWidth;
+    const y = element.y * this.logicalHeight;
+    const fontSize = element.fontSize || 24;
+
+    ctx.save();
+    ctx.globalAlpha = element.opacity || 1;
+    ctx.fillStyle = element.color;
+    ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+
+    // Render each line of text
+    const lines = (element.text || '').split('\n');
+    const lineHeight = fontSize * 1.3;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], x, y + i * lineHeight);
+    }
+
+    ctx.restore();
+  }
+
   _renderStroke(stroke) {
     const ctx = this.ctx;
+    if (!stroke.points || stroke.points.length === 0) return;
     const points = stroke.points.map((p) => this._denormalizePoint(p));
-
-    if (points.length === 0) return;
 
     ctx.save();
     ctx.globalAlpha = stroke.opacity;
@@ -226,23 +282,25 @@ class Whiteboard {
     if (points.length === 1) {
       // Single point — draw a dot
       const p = points[0];
-      const radius = (stroke.width * (p.pressure || 0.5)) / 2;
+      const radius = Math.max((stroke.width * (p.pressure || 0.5)) / 2, 1);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(radius, 1), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Multi-point — draw smooth line with pressure
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-
+      // Render each segment as its own path so pressure applies per-segment
+      // (Canvas only uses the last-set lineWidth per stroke() call)
       for (let i = 1; i < points.length; i++) {
         const prev = points[i - 1];
         const curr = points[i];
-        const pressure = curr.pressure || 0.5;
 
-        ctx.lineWidth = stroke.width * pressure;
+        // Blend pressure between the two endpoints for smooth transitions
+        const avgPressure = ((prev.pressure || 0.5) + (curr.pressure || 0.5)) / 2;
+        ctx.lineWidth = Math.max(stroke.width * avgPressure, 0.5);
 
-        // Use quadratic curve for smoothness
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+
+        // Use quadratic curve through midpoints for smoothness
         if (i < points.length - 1) {
           const next = points[i + 1];
           const midX = (curr.x + next.x) / 2;
@@ -251,8 +309,8 @@ class Whiteboard {
         } else {
           ctx.lineTo(curr.x, curr.y);
         }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
 
     ctx.restore();
@@ -264,17 +322,17 @@ class Whiteboard {
     ctx.fillStyle = this.theme === 'dark' ? '#000000' : '#ffffff';
     ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
 
-    // Draw all strokes for current board
+    // Draw all elements for current board
     const board = this.boards.get(this.currentBoardId);
     if (board) {
-      for (const stroke of board.strokes) {
-        this._renderStroke(stroke);
+      for (const element of board.strokes) {
+        this._renderElement(element);
       }
     }
 
     // Draw live stroke from remote (viewer)
     if (this.liveStroke) {
-      this._renderStroke(this.liveStroke);
+      this._renderElement(this.liveStroke);
     }
   }
 
@@ -326,17 +384,39 @@ class Whiteboard {
     }
   }
 
+  // --- Text handling ---
+  addText(textElement) {
+    const board = this.boards.get(this.currentBoardId);
+    if (!board) return;
+    board.strokes.push(textElement);
+    board.undone = [];
+    this.redraw();
+  }
+
   // --- Remote stroke handling (viewer) ---
   addRemoteStroke(stroke) {
     const board = this.boards.get(stroke.boardId || this.currentBoardId);
     if (!board) return;
-    board.strokes.push({
-      points: stroke.points,
-      color: stroke.color,
-      width: stroke.width,
-      tool: stroke.tool,
-      opacity: stroke.opacity,
-    });
+    // Handle both drawing strokes and text elements
+    if (stroke.tool === 'text') {
+      board.strokes.push({
+        tool: 'text',
+        x: stroke.x,
+        y: stroke.y,
+        text: stroke.text,
+        color: stroke.color,
+        fontSize: stroke.fontSize,
+        opacity: stroke.opacity || 1,
+      });
+    } else {
+      board.strokes.push({
+        points: stroke.points,
+        color: stroke.color,
+        width: stroke.width,
+        tool: stroke.tool,
+        opacity: stroke.opacity,
+      });
+    }
     board.undone = [];
     this.liveStroke = null;
     if ((stroke.boardId || this.currentBoardId) === this.currentBoardId) {
@@ -408,18 +488,27 @@ class Whiteboard {
     const scaleY = height / this.logicalHeight;
 
     tmpCtx.save();
-    for (const stroke of board.strokes) {
-      const points = stroke.points.map((p) => ({
+    for (const element of board.strokes) {
+      if (element.tool === 'text') {
+        // Render text in thumbnail
+        const fontSize = Math.max((element.fontSize || 24) * scaleX, 4);
+        tmpCtx.fillStyle = element.color;
+        tmpCtx.font = `${fontSize}px sans-serif`;
+        tmpCtx.textBaseline = 'top';
+        tmpCtx.fillText(element.text || '', element.x * width, element.y * height);
+        continue;
+      }
+
+      if (!element.points || element.points.length === 0) continue;
+      const points = element.points.map((p) => ({
         x: p.x * width,
         y: p.y * height,
         pressure: p.pressure || 0.5,
       }));
 
-      if (points.length === 0) continue;
-
-      tmpCtx.globalAlpha = stroke.opacity;
-      tmpCtx.strokeStyle = stroke.color;
-      tmpCtx.fillStyle = stroke.color;
+      tmpCtx.globalAlpha = element.opacity;
+      tmpCtx.strokeStyle = element.color;
+      tmpCtx.fillStyle = element.color;
       tmpCtx.lineCap = 'round';
       tmpCtx.lineJoin = 'round';
 
@@ -428,7 +517,7 @@ class Whiteboard {
         tmpCtx.arc(points[0].x, points[0].y, 1, 0, Math.PI * 2);
         tmpCtx.fill();
       } else {
-        tmpCtx.lineWidth = Math.max(stroke.width * scaleX * 0.5, 0.5);
+        tmpCtx.lineWidth = Math.max(element.width * scaleX * 0.5, 0.5);
         tmpCtx.beginPath();
         tmpCtx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length; i++) {

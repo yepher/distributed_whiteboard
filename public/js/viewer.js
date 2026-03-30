@@ -51,19 +51,27 @@
   const iconCompress = btnFullscreen.querySelector('.icon-compress');
 
   btnFullscreen.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(() => {});
     } else {
-      document.exitFullscreen();
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     }
   });
 
-  document.addEventListener('fullscreenchange', () => {
-    const isFs = !!document.fullscreenElement;
+  function onFullscreenChange() {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     iconExpand.style.display = isFs ? 'none' : '';
     iconCompress.style.display = isFs ? '' : 'none';
     setTimeout(() => wb.resize(), 100);
-  });
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // Prevent iPad gestures from escaping fullscreen
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);

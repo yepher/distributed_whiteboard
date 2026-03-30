@@ -35,6 +35,9 @@
 
   // --- Whiteboard setup ---
   const canvas = document.getElementById('whiteboard');
+  const canvasArea = document.getElementById('canvas-area');
+  let activeTextInput = null;
+
   const wb = new Whiteboard(canvas, {
     interactive: true,
     theme: 'dark',
@@ -49,7 +52,96 @@
         lastLiveSend = now;
       }
     },
+    onTextPlacement: (x, y) => {
+      placeTextInput(x, y);
+    },
   });
+
+  // --- Text input handling ---
+  function placeTextInput(x, y) {
+    // Commit any existing text input first
+    commitTextInput();
+
+    const input = document.createElement('textarea');
+    input.className = 'canvas-text-input';
+    input.style.left = x + 'px';
+    input.style.top = y + 'px';
+    input.style.color = wb.currentColor;
+    input.style.fontSize = wb.currentFontSize + 'px';
+    input.rows = 1;
+
+    canvasArea.appendChild(input);
+    activeTextInput = { element: input, x, y };
+
+    // Small delay so the tap doesn't immediately blur
+    setTimeout(() => {
+      input.focus();
+    }, 50);
+
+    // Auto-grow textarea as user types
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    });
+
+    // Commit on Enter (without Shift) or blur
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        commitTextInput();
+      }
+      if (e.key === 'Escape') {
+        cancelTextInput();
+      }
+      // Stop keyboard shortcuts from firing while typing
+      e.stopPropagation();
+    });
+
+    input.addEventListener('blur', () => {
+      // Small delay to allow button clicks to process
+      setTimeout(() => commitTextInput(), 100);
+    });
+  }
+
+  function commitTextInput() {
+    if (!activeTextInput) return;
+    const { element, x, y } = activeTextInput;
+    const text = element.value.trim();
+    activeTextInput = null;
+
+    if (element.parentNode) {
+      element.remove();
+    }
+
+    if (!text) return;
+
+    // Normalize position to 0-1 range
+    const rect = canvas.getBoundingClientRect();
+    const nx = x / rect.width;
+    const ny = y / rect.height;
+
+    const textElement = {
+      tool: 'text',
+      x: nx,
+      y: ny,
+      text: text,
+      color: wb.currentColor,
+      fontSize: wb.currentFontSize,
+      opacity: 1,
+    };
+
+    wb.addText(textElement);
+    send({ type: 'draw', boardId: currentBoardId, ...textElement });
+    updateCurrentThumbnail();
+  }
+
+  function cancelTextInput() {
+    if (!activeTextInput) return;
+    if (activeTextInput.element.parentNode) {
+      activeTextInput.element.remove();
+    }
+    activeTextInput = null;
+  }
 
   // --- Board management ---
   let boards = [{ id: 0 }];
@@ -232,20 +324,29 @@
   const iconCompress = btnFullscreen.querySelector('.icon-compress');
 
   btnFullscreen.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(() => {});
     } else {
-      document.exitFullscreen();
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     }
   });
 
-  document.addEventListener('fullscreenchange', () => {
-    const isFs = !!document.fullscreenElement;
+  function onFullscreenChange() {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     iconExpand.style.display = isFs ? 'none' : '';
     iconCompress.style.display = isFs ? '' : 'none';
     // Resize canvas after fullscreen transition
     setTimeout(() => wb.resize(), 100);
-  });
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // Prevent iPad gestures from escaping fullscreen
+  // Block pinch-to-zoom (gesturestart/gesturechange are Safari-specific)
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
 
   // --- Keyboard shortcuts ---
   document.addEventListener('keydown', (e) => {
