@@ -240,9 +240,11 @@ function getLocalIP() {
 
 server.listen(PORT, () => {
   const ip = getLocalIP();
+  const hostname = os.hostname().replace(/\.local$/, '') + '.local';
   console.log(`\n  Distributed Whiteboard Server`);
   console.log(`  ─────────────────────────────`);
-  console.log(`  Presenter: http://${ip}:${PORT}/presenter`);
-  console.log(`  Viewer:    http://${ip}:${PORT}/viewer`);
+  console.log(`  Presenter: http://${hostname}:${PORT}/presenter`);
+  console.log(`  Viewer:    http://${hostname}:${PORT}/viewer`);
+  console.log(`  IP:        http://${ip}:${PORT}`);
   console.log(`  Local:     http://localhost:${PORT}\n`);
 });
