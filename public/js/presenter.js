@@ -226,6 +226,27 @@
     updateAllThumbnails();
   });
 
+  // --- Fullscreen ---
+  const btnFullscreen = document.getElementById('btn-fullscreen');
+  const iconExpand = btnFullscreen.querySelector('.icon-expand');
+  const iconCompress = btnFullscreen.querySelector('.icon-compress');
+
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    const isFs = !!document.fullscreenElement;
+    iconExpand.style.display = isFs ? 'none' : '';
+    iconCompress.style.display = isFs ? '' : 'none';
+    // Resize canvas after fullscreen transition
+    setTimeout(() => wb.resize(), 100);
+  });
+
   // --- Keyboard shortcuts ---
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'z') {

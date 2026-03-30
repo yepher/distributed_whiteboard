@@ -45,6 +45,26 @@
     }, 3000);
   }
 
+  // --- Fullscreen ---
+  const btnFullscreen = document.getElementById('btn-fullscreen');
+  const iconExpand = btnFullscreen.querySelector('.icon-expand');
+  const iconCompress = btnFullscreen.querySelector('.icon-compress');
+
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    const isFs = !!document.fullscreenElement;
+    iconExpand.style.display = isFs ? 'none' : '';
+    iconCompress.style.display = isFs ? '' : 'none';
+    setTimeout(() => wb.resize(), 100);
+  });
+
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
