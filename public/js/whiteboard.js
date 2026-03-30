@@ -864,6 +864,129 @@ class Whiteboard {
     return tmpCanvas.toDataURL();
   }
 
+  // --- Export: SVG (current board) ---
+  toSVG() {
+    const w = this.logicalWidth;
+    const h = this.logicalHeight;
+    const bg = this.theme === 'dark' ? '#000000' : '#ffffff';
+    const board = this.boards.get(this.currentBoardId);
+    if (!board) return '';
+
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
+    svg += `<rect width="${w}" height="${h}" fill="${bg}"/>\n`;
+
+    for (const el of board.strokes) {
+      if (el.tool === 'text') {
+        svg += this._textToSVG(el, w, h);
+      } else if (el.points && el.points.length > 0) {
+        svg += this._strokeToSVG(el, w, h);
+      }
+    }
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  _strokeToSVG(stroke, w, h) {
+    const points = stroke.points.map((p) => ({ x: p.x * w, y: p.y * h }));
+    if (points.length === 0) return '';
+
+    if (points.length === 1) {
+      const p = points[0];
+      const r = Math.max(stroke.width / 2, 1);
+      return `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${stroke.color}" opacity="${stroke.opacity}"/>\n`;
+    }
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const curr = points[i];
+      if (i < points.length - 1) {
+        const next = points[i + 1];
+        const midX = (curr.x + next.x) / 2;
+        const midY = (curr.y + next.y) / 2;
+        d += ` Q ${curr.x} ${curr.y} ${midX} ${midY}`;
+      } else {
+        d += ` L ${curr.x} ${curr.y}`;
+      }
+    }
+
+    return `<path d="${d}" fill="none" stroke="${stroke.color}" stroke-width="${stroke.width}" stroke-linecap="round" stroke-linejoin="round" opacity="${stroke.opacity}"/>\n`;
+  }
+
+  _textToSVG(element, w, h) {
+    const x = element.x * w;
+    const y = element.y * h;
+    const fontSize = element.fontSize || 24;
+    const lines = (element.text || '').split('\n');
+    const lineHeight = fontSize * 1.3;
+
+    let svg = '';
+    for (let i = 0; i < lines.length; i++) {
+      const escaped = lines[i].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      svg += `<text x="${x}" y="${y + i * lineHeight + fontSize}" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="${fontSize}" fill="${element.color}" opacity="${element.opacity || 1}">${escaped}</text>\n`;
+    }
+    return svg;
+  }
+
+  // --- Export: PDF (all boards, one page per board) ---
+  async toPDF() {
+    // Dynamically load jsPDF
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/js/jspdf.umd.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    const { jsPDF } = window.jspdf;
+    const ratio = this.logicalWidth / this.logicalHeight;
+    const pdf = new jsPDF({ orientation: ratio > 1 ? 'landscape' : 'portrait' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    const savedBoard = this.currentBoardId;
+    const sortedIds = [...this.boards.keys()].sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedIds.length; i++) {
+      if (i > 0) pdf.addPage();
+      const boardId = sortedIds[i];
+
+      // Temporarily switch to this board and render to canvas
+      this.selectedElements.clear();
+      this.currentBoardId = boardId;
+      this.redraw();
+
+      // Convert canvas to image data
+      const imgData = this.canvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 0, pageW, pageH);
+    }
+
+    // Restore original board
+    this.currentBoardId = savedBoard;
+    this.redraw();
+
+    return pdf;
+  }
+
+  downloadSVG(filename = 'whiteboard.svg') {
+    const svg = this.toSVG();
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async downloadPDF(filename = 'whiteboard.pdf') {
+    const pdf = await this.toPDF();
+    pdf.save(filename);
+  }
+
   destroy() {
     window.removeEventListener('resize', this._resizeHandler);
   }

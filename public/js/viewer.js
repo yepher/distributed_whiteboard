@@ -81,6 +81,30 @@
   document.addEventListener('gesturechange', (e) => e.preventDefault());
   document.addEventListener('gestureend', (e) => e.preventDefault());
 
+  // --- Download menu ---
+  const btnDownload = document.getElementById('btn-download');
+  const downloadMenu = document.getElementById('download-menu');
+  if (btnDownload && downloadMenu) {
+    btnDownload.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadMenu.classList.toggle('show');
+    });
+    document.addEventListener('click', () => downloadMenu.classList.remove('show'));
+    downloadMenu.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        downloadMenu.classList.remove('show');
+        if (btn.dataset.format === 'svg') {
+          wb.downloadSVG();
+        } else if (btn.dataset.format === 'pdf') {
+          btn.textContent = 'Generating...';
+          await wb.downloadPDF();
+          btn.textContent = 'PDF (all boards)';
+        }
+      });
+    });
+  }
+
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 

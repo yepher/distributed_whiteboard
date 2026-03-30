@@ -16,11 +16,22 @@
   <!-- Board indicator -->
   <div id="board-indicator">Board 1</div>
 
-  <!-- Fullscreen button -->
-  <button id="btn-fullscreen" class="fullscreen-btn" title="Full screen">
-    <svg class="icon-expand" viewBox="0 0 24 24" width="24" height="24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
-    <svg class="icon-compress" viewBox="0 0 24 24" width="24" height="24" style="display:none"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" fill="currentColor"/></svg>
-  </button>
+  <!-- Floating buttons -->
+  <div class="viewer-buttons">
+    <div class="download-group">
+      <button id="btn-download" class="fullscreen-btn" title="Download">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/></svg>
+      </button>
+      <div id="download-menu" class="download-menu">
+        <button data-format="svg">SVG (current board)</button>
+        <button data-format="pdf">PDF (all boards)</button>
+      </div>
+    </div>
+    <button id="btn-fullscreen" class="fullscreen-btn" title="Full screen">
+      <svg class="icon-expand" viewBox="0 0 24 24" width="24" height="24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="currentColor"/></svg>
+      <svg class="icon-compress" viewBox="0 0 24 24" width="24" height="24" style="display:none"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" fill="currentColor"/></svg>
+    </button>
+  </div>
 
   <!-- Connection status -->
   <div id="connection-status" class="disconnected">Connecting...</div>
