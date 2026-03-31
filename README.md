@@ -2,6 +2,8 @@
 
 A real-time collaborative whiteboard for creating training videos. Draw on your iPad (presenter) and have it appear instantly on any viewer's screen — perfect for screen recording with tools like Screen Studio.
 
+![presenter](screens/demo.gif)
+
 ## Quick Start
 
 ```bash
