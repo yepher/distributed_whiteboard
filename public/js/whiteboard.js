@@ -34,6 +34,22 @@ class Whiteboard {
     this.onMoveComplete = options.onMoveComplete || null;
     this.onMoveLive = options.onMoveLive || null;
     this.onDeleteElement = options.onDeleteElement || null;
+    this.onReplayStroke = options.onReplayStroke || null;
+    this.onReplayLive = options.onReplayLive || null;
+    this.onReplayDone = options.onReplayDone || null;
+    this.onReplayStart = options.onReplayStart || null;
+
+    // Replay state
+    this._isReplaying = false;
+    this._replayPaused = false;
+    this._replayStrokes = null;
+    this._replayStrokeIdx = 0;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+    this._replaySpeed = 1;
+    this._replayAnimId = null;
+    this._replayPauseTimer = null;
+    this._replayPointsPerFrame = 2;
 
     // Live stroke from remote (for viewer)
     this.liveStroke = null;
@@ -140,6 +156,7 @@ class Whiteboard {
   }
 
   _onPointerDown(e) {
+    if (this._isReplaying) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     const pt = this._getCanvasPoint(e);
@@ -987,7 +1004,258 @@ class Whiteboard {
     pdf.save(filename);
   }
 
+  // --- Replay engine ---
+  startReplay() {
+    const board = this.boards.get(this.currentBoardId);
+    if (!board || board.strokes.length === 0) return false;
+
+    this._isReplaying = true;
+    this._replayPaused = false;
+    this._replayStrokes = board.strokes.map((el) => this._cloneElement(el));
+    this._replayStrokeIdx = 0;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+    this.selectedElements.clear();
+
+    if (this.onReplayStart) {
+      this.onReplayStart({ boardId: this.currentBoardId });
+    }
+
+    this._replayRedraw();
+    this._scheduleReplayFrame();
+    return true;
+  }
+
+  stopReplay() {
+    if (!this._isReplaying) return;
+    this._isReplaying = false;
+    this._replayPaused = false;
+    if (this._replayAnimId) cancelAnimationFrame(this._replayAnimId);
+    if (this._replayPauseTimer) clearTimeout(this._replayPauseTimer);
+    this._replayAnimId = null;
+    this._replayPauseTimer = null;
+    this._replayStrokes = null;
+    this.redraw();
+    if (this.onReplayDone) this.onReplayDone();
+  }
+
+  pauseReplay() {
+    if (!this._isReplaying) return;
+    this._replayPaused = true;
+    if (this._replayAnimId) cancelAnimationFrame(this._replayAnimId);
+    if (this._replayPauseTimer) clearTimeout(this._replayPauseTimer);
+    this._replayAnimId = null;
+    this._replayPauseTimer = null;
+  }
+
+  resumeReplay() {
+    if (!this._isReplaying || !this._replayPaused) return;
+    this._replayPaused = false;
+    this._scheduleReplayFrame();
+  }
+
+  toggleReplayPause() {
+    if (this._replayPaused) this.resumeReplay();
+    else this.pauseReplay();
+  }
+
+  setReplaySpeed(multiplier) {
+    this._replaySpeed = multiplier;
+  }
+
+  stepForward() {
+    if (!this._isReplaying || !this._replayPaused) return;
+    if (this._replayStrokeIdx >= this._replayStrokes.length) return;
+
+    // Complete the current element
+    const el = this._replayStrokes[this._replayStrokeIdx];
+    if (el.tool === 'text') {
+      this._replayCharIdx = el.text.length;
+    } else if (el.points) {
+      this._replayPointIdx = el.points.length;
+    }
+
+    // Move to next element
+    this._replayStrokeIdx++;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+
+    // Notify completed stroke
+    if (this.onReplayStroke) {
+      this.onReplayStroke({
+        boardId: this.currentBoardId,
+        ...el,
+      });
+    }
+
+    this._replayRedraw();
+  }
+
+  stepBack() {
+    if (!this._isReplaying || !this._replayPaused) return;
+    if (this._replayStrokeIdx <= 0) return;
+
+    this._replayStrokeIdx--;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+    this._replayRedraw();
+  }
+
+  jumpToStart() {
+    if (!this._isReplaying) return;
+    this.pauseReplay();
+    this._replayStrokeIdx = 0;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+    this._replayRedraw();
+  }
+
+  jumpToEnd() {
+    if (!this._isReplaying) return;
+    this.pauseReplay();
+    this._replayStrokeIdx = this._replayStrokes.length;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+    this._replayRedraw();
+  }
+
+  _scheduleReplayFrame() {
+    if (!this._isReplaying || this._replayPaused) return;
+    this._replayAnimId = requestAnimationFrame(() => this._replayFrame());
+  }
+
+  _replayFrame() {
+    if (!this._isReplaying || this._replayPaused) return;
+
+    // Check if done
+    if (this._replayStrokeIdx >= this._replayStrokes.length) {
+      this._isReplaying = false;
+      this._replayPaused = false;
+      this._replayStrokes = null;
+      this.redraw();
+      if (this.onReplayDone) this.onReplayDone();
+      return;
+    }
+
+    const el = this._replayStrokes[this._replayStrokeIdx];
+    const ppf = Math.max(1, Math.round(this._replayPointsPerFrame * this._replaySpeed));
+
+    if (el.tool === 'text') {
+      // Typewriter: advance chars
+      const cpf = Math.max(1, Math.round(2 * this._replaySpeed));
+      this._replayCharIdx += cpf;
+
+      if (this._replayCharIdx >= el.text.length) {
+        this._replayCharIdx = el.text.length;
+        this._advanceToNextElement(el);
+        return;
+      }
+    } else if (el.points) {
+      // Stroke: advance points
+      this._replayPointIdx += ppf;
+
+      if (this._replayPointIdx >= el.points.length) {
+        this._replayPointIdx = el.points.length;
+        this._advanceToNextElement(el);
+        return;
+      }
+    } else {
+      // Unknown element type — skip
+      this._replayStrokeIdx++;
+      this._replayPointIdx = 0;
+      this._replayCharIdx = 0;
+    }
+
+    // Send live update to viewers
+    if (this.onReplayLive) {
+      if (el.tool === 'text') {
+        this.onReplayLive({
+          boardId: this.currentBoardId,
+          tool: 'text',
+          x: el.x, y: el.y,
+          text: el.text.slice(0, this._replayCharIdx),
+          color: el.color, fontSize: el.fontSize, opacity: el.opacity,
+        });
+      } else if (el.points) {
+        this.onReplayLive({
+          boardId: this.currentBoardId,
+          points: el.points.slice(0, this._replayPointIdx),
+          color: el.color, width: el.width, tool: el.tool, opacity: el.opacity,
+        });
+      }
+    }
+
+    this._replayRedraw();
+    this._scheduleReplayFrame();
+  }
+
+  _advanceToNextElement(completedEl) {
+    // Notify completed stroke
+    if (this.onReplayStroke) {
+      this.onReplayStroke({
+        boardId: this.currentBoardId,
+        ...completedEl,
+      });
+    }
+
+    this._replayStrokeIdx++;
+    this._replayPointIdx = 0;
+    this._replayCharIdx = 0;
+
+    // Brief pause between elements
+    const pauseMs = Math.max(50, Math.round(200 / this._replaySpeed));
+    this._replayPauseTimer = setTimeout(() => {
+      this._replayRedraw();
+      this._scheduleReplayFrame();
+    }, pauseMs);
+  }
+
+  _replayRedraw() {
+    const ctx = this.ctx;
+    ctx.fillStyle = this.theme === 'dark' ? '#000000' : '#ffffff';
+    ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
+
+    if (!this._replayStrokes) return;
+
+    // Render all completed elements
+    for (let i = 0; i < this._replayStrokeIdx && i < this._replayStrokes.length; i++) {
+      this._renderElement(this._replayStrokes[i]);
+    }
+
+    // Render current element partially
+    if (this._replayStrokeIdx < this._replayStrokes.length) {
+      const el = this._replayStrokes[this._replayStrokeIdx];
+      if (el.tool === 'text') {
+        // Partial text (typewriter)
+        this._renderText({
+          ...el,
+          text: el.text.slice(0, this._replayCharIdx),
+        });
+      } else if (el.points && this._replayPointIdx > 0) {
+        // Partial stroke
+        this._renderStroke({
+          ...el,
+          points: el.points.slice(0, this._replayPointIdx),
+        });
+      }
+    }
+  }
+
+  get isReplaying() {
+    return this._isReplaying;
+  }
+
+  get isReplayPaused() {
+    return this._replayPaused;
+  }
+
+  get replayProgress() {
+    if (!this._replayStrokes || this._replayStrokes.length === 0) return 0;
+    return this._replayStrokeIdx / this._replayStrokes.length;
+  }
+
   destroy() {
+    this.stopReplay();
     window.removeEventListener('resize', this._resizeHandler);
   }
 }

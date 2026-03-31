@@ -260,6 +260,12 @@ wss.on('connection', (ws, req) => {
         break;
       }
 
+      case 'replayStart': {
+        // Clear viewer state for replay — broadcast clear for the board
+        broadcast(ws._sessionId, { type: 'clear', boardId: msg.boardId });
+        break;
+      }
+
       case 'resync': {
         // Send full state to all viewers in this session
         const fullState = JSON.stringify({

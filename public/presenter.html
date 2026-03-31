@@ -30,6 +30,9 @@
       <button id="btn-redo" class="tool-btn" title="Redo">
         <svg viewBox="0 0 24 24" width="24" height="24"><path d="M11.5 8c2.65 0 5.05 1 6.9 2.6L22 7v9h-9l3.6-3.6C15.1 11.1 13.4 10.5 11.5 10.5c-3.5 0-6.5 2.3-7.5 5.5L1.8 15.2C3.2 11.2 7 8 11.5 8z" fill="currentColor"/></svg>
       </button>
+      <button id="btn-replay" class="tool-btn" title="Replay drawing">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      </button>
     </div>
 
     <div class="tool-group" id="tools-group">
@@ -58,14 +61,19 @@
     </div>
 
     <div class="tool-group" id="colors-group">
-      <button class="color-btn active" data-color="#1FD5F9" style="background:#1FD5F9" title="LK Cyan"></button>
-      <button class="color-btn" data-color="#002CF2" style="background:#002CF2" title="LK Blue"></button>
-      <button class="color-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
-      <button class="color-btn" data-color="#ef4444" style="background:#ef4444" title="Red"></button>
-      <button class="color-btn" data-color="#22c55e" style="background:#22c55e" title="Green"></button>
-      <button class="color-btn" data-color="#eab308" style="background:#eab308" title="Yellow"></button>
-      <button class="color-btn" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-      <button class="color-btn" data-color="#a855f7" style="background:#a855f7" title="Purple"></button>
+      <div class="color-picker">
+        <button id="color-current" class="color-current" style="background:#1FD5F9" title="Color"></button>
+        <div id="color-palette" class="color-palette">
+          <button class="color-btn active" data-color="#1FD5F9" style="background:#1FD5F9" title="LK Cyan"></button>
+          <button class="color-btn" data-color="#002CF2" style="background:#002CF2" title="LK Blue"></button>
+          <button class="color-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+          <button class="color-btn" data-color="#ef4444" style="background:#ef4444" title="Red"></button>
+          <button class="color-btn" data-color="#22c55e" style="background:#22c55e" title="Green"></button>
+          <button class="color-btn" data-color="#eab308" style="background:#eab308" title="Yellow"></button>
+          <button class="color-btn" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+          <button class="color-btn" data-color="#a855f7" style="background:#a855f7" title="Purple"></button>
+        </div>
+      </div>
     </div>
 
     <div class="tool-group" id="actions-group">
@@ -88,6 +96,40 @@
           <button data-format="pdf">PDF (all boards)</button>
         </div>
       </div>
+    </div>
+  </footer>
+
+  <!-- Playback bar (shown during replay) -->
+  <footer id="playback-bar" class="hidden">
+    <div class="pb-group">
+      <button id="pb-start" class="pb-btn" title="Back to start">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" fill="currentColor"/></svg>
+      </button>
+      <button id="pb-step-back" class="pb-btn" title="Step back">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z" fill="currentColor"/></svg>
+      </button>
+      <button id="pb-pause" class="pb-btn pb-primary" title="Pause / Play">
+        <svg class="icon-pause" viewBox="0 0 24 24" width="24" height="24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor"/></svg>
+        <svg class="icon-play" viewBox="0 0 24 24" width="24" height="24" style="display:none"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      </button>
+      <button id="pb-step-fwd" class="pb-btn" title="Step forward">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" fill="currentColor"/></svg>
+      </button>
+      <button id="pb-end" class="pb-btn" title="Skip to end">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 18l8.5-6L4 6v12zm9 0h2V6h-2v12z" fill="currentColor" transform="translate(2,0)"/></svg>
+      </button>
+    </div>
+    <div class="pb-group pb-speed">
+      <button class="pb-speed-btn" data-speed="0.5">0.5x</button>
+      <button class="pb-speed-btn active" data-speed="1">1x</button>
+      <button class="pb-speed-btn" data-speed="2">2x</button>
+      <button class="pb-speed-btn" data-speed="4">4x</button>
+    </div>
+    <div class="pb-group">
+      <button id="pb-cancel" class="pb-btn pb-cancel" title="Cancel replay">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg>
+        Cancel
+      </button>
     </div>
   </footer>
 

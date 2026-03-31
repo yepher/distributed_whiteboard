@@ -90,6 +90,24 @@
       send({ type: 'deleteElement', ...data });
       updateCurrentThumbnail();
     },
+    onReplayStart: (data) => {
+      send({ type: 'replayStart', ...data });
+    },
+    onReplayStroke: (stroke) => {
+      send({ type: 'draw', ...stroke });
+    },
+    onReplayLive: (stroke) => {
+      const now = Date.now();
+      if (now - lastLiveSend > LIVE_INTERVAL) {
+        send({ type: 'drawLive', ...stroke });
+        lastLiveSend = now;
+      }
+    },
+    onReplayDone: () => {
+      send({ type: 'resync' });
+      showPlaybackBar(false);
+      updateCurrentThumbnail();
+    },
   });
 
   // --- Text input handling ---
@@ -133,8 +151,19 @@
     });
 
     input.addEventListener('blur', () => {
-      // Small delay to allow button clicks to process
-      setTimeout(() => commitTextInput(), 100);
+      // Delay to check if focus moved to a toolbar button (color, tool, etc.)
+      // If so, don't commit — the user is adjusting settings
+      setTimeout(() => {
+        if (!activeTextInput) return;
+        // If focus moved to a color button or toolbar element, refocus the input
+        const focused = document.activeElement;
+        const inToolbar = focused && (focused.closest('#toolbar') || focused.closest('#colors-group'));
+        if (inToolbar) {
+          activeTextInput.element.focus();
+          return;
+        }
+        commitTextInput();
+      }, 150);
     });
   }
 
@@ -306,13 +335,36 @@
     });
   });
 
-  // --- Color selection ---
+  // --- Color picker ---
+  const colorCurrentBtn = document.getElementById('color-current');
+  const colorPalette = document.getElementById('color-palette');
   const colorButtons = document.querySelectorAll('.color-btn');
+
+  colorCurrentBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    colorPalette.classList.toggle('show');
+  });
+
+  // Close palette when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.color-picker')) {
+      colorPalette.classList.remove('show');
+    }
+  });
+
   colorButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       colorButtons.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       wb.currentColor = btn.dataset.color;
+      colorCurrentBtn.style.background = btn.dataset.color;
+      colorPalette.classList.remove('show');
+      // Update active text input color
+      if (activeTextInput) {
+        activeTextInput.element.style.color = btn.dataset.color;
+        activeTextInput.element.focus();
+      }
       // Recolor selected element
       if (wb.selectedElements.size > 0) {
         wb.recolorSelected(btn.dataset.color);
@@ -390,6 +442,70 @@
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('gesturechange', (e) => e.preventDefault());
   document.addEventListener('gestureend', (e) => e.preventDefault());
+
+  // --- Replay / Playback controls ---
+  const toolbarEl = document.getElementById('toolbar');
+  const playbackBarEl = document.getElementById('playback-bar');
+  const pbPauseBtn = document.getElementById('pb-pause');
+  const pbIconPause = pbPauseBtn.querySelector('.icon-pause');
+  const pbIconPlay = pbPauseBtn.querySelector('.icon-play');
+
+  function showPlaybackBar(show) {
+    toolbarEl.classList.toggle('hidden', show);
+    playbackBarEl.classList.toggle('hidden', !show);
+    if (!show) {
+      pbIconPause.style.display = '';
+      pbIconPlay.style.display = 'none';
+    }
+  }
+
+  function updatePauseButton() {
+    const paused = wb.isReplayPaused;
+    pbIconPause.style.display = paused ? 'none' : '';
+    pbIconPlay.style.display = paused ? '' : 'none';
+  }
+
+  document.getElementById('btn-replay').addEventListener('click', () => {
+    if (wb.startReplay()) {
+      showPlaybackBar(true);
+    }
+  });
+
+  pbPauseBtn.addEventListener('click', () => {
+    wb.toggleReplayPause();
+    updatePauseButton();
+  });
+
+  document.getElementById('pb-step-fwd').addEventListener('click', () => {
+    wb.stepForward();
+  });
+
+  document.getElementById('pb-step-back').addEventListener('click', () => {
+    wb.stepBack();
+  });
+
+  document.getElementById('pb-start').addEventListener('click', () => {
+    wb.jumpToStart();
+    updatePauseButton();
+  });
+
+  document.getElementById('pb-end').addEventListener('click', () => {
+    wb.jumpToEnd();
+    updatePauseButton();
+  });
+
+  document.getElementById('pb-cancel').addEventListener('click', () => {
+    wb.stopReplay();
+    showPlaybackBar(false);
+  });
+
+  document.querySelectorAll('.pb-speed-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pb-speed-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      wb.setReplaySpeed(parseFloat(btn.dataset.speed));
+    });
+  });
 
   // --- Download menu ---
   const btnDownload = document.getElementById('btn-download');
