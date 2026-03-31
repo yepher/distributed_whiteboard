@@ -303,6 +303,20 @@ body.viewer #whiteboard {
   transform: scale(1.15);
 }
 
+/* === Present button === */
+.present-btn {
+  width: auto !important;
+  padding: 0 10px;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.present-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
 /* === Line width slider === */
 #line-width {
   width: 80px;
@@ -443,7 +457,13 @@ body.viewer #whiteboard {
   background: var(--btn-hover, #2a2a2a);
 }
 
-.download-menu button + button {
+.download-menu button + button,
+.download-menu button + .download-menu-divider + button {
+  border-top: 1px solid var(--border, #333);
+}
+
+.download-menu-divider {
+  height: 0;
   border-top: 1px solid var(--border, #333);
 }
 

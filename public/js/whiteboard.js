@@ -50,6 +50,7 @@ class Whiteboard {
     this._replayAnimId = null;
     this._replayPauseTimer = null;
     this._replayPointsPerFrame = 2;
+    this._replayStepMode = false;
 
     // Live stroke from remote (for viewer)
     this.liveStroke = null;
@@ -985,7 +986,105 @@ class Whiteboard {
     this.currentBoardId = savedBoard;
     this.redraw();
 
+    // Embed board data in PDF for save/load round-trip
+    try {
+      await this._loadPako();
+      const data = this.toJSON();
+      const json = JSON.stringify(data);
+      const compressed = window.pako.deflate(json);
+      const b64 = btoa(String.fromCharCode.apply(null, compressed));
+      pdf.setProperties({
+        title: 'Whiteboard Export',
+        subject: 'WB1:' + b64,
+        creator: 'Distributed Whiteboard',
+      });
+    } catch (e) {
+      console.warn('Could not embed whiteboard data in PDF:', e);
+    }
+
     return pdf;
+  }
+
+  // --- Save/Load ---
+  toJSON() {
+    const boards = [];
+    const sortedIds = [...this.boards.keys()].sort((a, b) => a - b);
+    for (const id of sortedIds) {
+      const board = this.boards.get(id);
+      boards.push({
+        id,
+        strokes: board.strokes.map((el) => this._cloneElement(el)),
+      });
+    }
+    return {
+      v: 1,
+      boards,
+      currentBoardId: this.currentBoardId,
+      theme: this.theme,
+    };
+  }
+
+  loadFromJSON(data) {
+    if (!data || !data.boards || !Array.isArray(data.boards)) {
+      throw new Error('Invalid whiteboard data');
+    }
+    this.loadFullState(data);
+  }
+
+  downloadJSON(filename = 'whiteboard.json') {
+    const json = JSON.stringify(this.toJSON(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async _loadPako() {
+    if (window.pako) return;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/js/pako.min.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  async loadFromPDF(file) {
+    await this._loadPako();
+
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Search for the embedded data marker in the PDF binary
+    // PDF properties are stored as text — look for 'WB1:' prefix
+    const text = new TextDecoder('latin1').decode(bytes);
+    const marker = 'WB1:';
+    const idx = text.indexOf(marker);
+    if (idx === -1) {
+      throw new Error('No whiteboard data found in this PDF');
+    }
+
+    // Extract the Base64 data (runs until the next PDF delimiter)
+    let end = idx + marker.length;
+    while (end < text.length && text[end] !== ')' && text[end] !== '<' && text[end] !== '\n' && text[end] !== '\r') {
+      end++;
+    }
+    const b64 = text.substring(idx + marker.length, end);
+
+    // Decode and decompress
+    const compressed = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const json = window.pako.inflate(compressed, { to: 'string' });
+    const data = JSON.parse(json);
+
+    if (data.v !== 1) {
+      throw new Error('Unsupported whiteboard data version');
+    }
+
+    this.loadFromJSON(data);
   }
 
   downloadSVG(filename = 'whiteboard.svg') {
@@ -1010,7 +1109,7 @@ class Whiteboard {
     if (!board || board.strokes.length === 0) return false;
 
     this._isReplaying = true;
-    this._replayPaused = false;
+    this._replayPaused = true;
     this._replayStrokes = board.strokes.map((el) => this._cloneElement(el));
     this._replayStrokeIdx = 0;
     this._replayPointIdx = 0;
@@ -1022,7 +1121,7 @@ class Whiteboard {
     }
 
     this._replayRedraw();
-    this._scheduleReplayFrame();
+    // Start paused — user presses play when ready
     return true;
   }
 
@@ -1051,6 +1150,7 @@ class Whiteboard {
   resumeReplay() {
     if (!this._isReplaying || !this._replayPaused) return;
     this._replayPaused = false;
+    this._replayStepMode = false;
     this._scheduleReplayFrame();
   }
 
@@ -1064,31 +1164,13 @@ class Whiteboard {
   }
 
   stepForward() {
-    if (!this._isReplaying || !this._replayPaused) return;
+    if (!this._isReplaying) return;
     if (this._replayStrokeIdx >= this._replayStrokes.length) return;
 
-    // Complete the current element
-    const el = this._replayStrokes[this._replayStrokeIdx];
-    if (el.tool === 'text') {
-      this._replayCharIdx = el.text.length;
-    } else if (el.points) {
-      this._replayPointIdx = el.points.length;
-    }
-
-    // Move to next element
-    this._replayStrokeIdx++;
-    this._replayPointIdx = 0;
-    this._replayCharIdx = 0;
-
-    // Notify completed stroke
-    if (this.onReplayStroke) {
-      this.onReplayStroke({
-        boardId: this.currentBoardId,
-        ...el,
-      });
-    }
-
-    this._replayRedraw();
+    // Animate the current element, then auto-pause when done
+    this._replayPaused = false;
+    this._replayStepMode = true; // Flag: pause after this element completes
+    this._scheduleReplayFrame();
   }
 
   stepBack() {
@@ -1201,6 +1283,14 @@ class Whiteboard {
     this._replayStrokeIdx++;
     this._replayPointIdx = 0;
     this._replayCharIdx = 0;
+
+    // If step mode, pause after this element
+    if (this._replayStepMode) {
+      this._replayStepMode = false;
+      this._replayPaused = true;
+      this._replayRedraw();
+      return;
+    }
 
     // Brief pause between elements
     const pauseMs = Math.max(50, Math.round(200 / this._replaySpeed));

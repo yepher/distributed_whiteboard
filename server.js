@@ -81,25 +81,28 @@ wss.on('connection', (ws, req) => {
     session.clients.presenters.add(ws);
   } else {
     session.clients.viewers.add(ws);
-    // Send full state to new viewer
-    ws.send(
-      JSON.stringify({
-        type: 'fullState',
-        boards: session.boards.map((b) => ({
-          id: b.id,
-          strokes: b.strokes,
-        })),
-        currentBoardId: session.currentBoardId,
-        theme: session.theme,
-      })
-    );
   }
+
+  // Send full state to any new connection (presenter or viewer)
+  // This lets presenters restore their boards on page refresh
+  ws.send(
+    JSON.stringify({
+      type: 'fullState',
+      boards: session.boards.map((b) => ({
+        id: b.id,
+        strokes: b.strokes,
+      })),
+      currentBoardId: session.currentBoardId,
+      theme: session.theme,
+    })
+  );
 
   ws.on('message', (raw) => {
     let msg;
     try {
       msg = JSON.parse(raw);
-    } catch {
+    } catch (e) {
+      console.error('Failed to parse WebSocket message:', e.message, 'size:', raw.length);
       return;
     }
 
@@ -263,6 +266,35 @@ wss.on('connection', (ws, req) => {
       case 'replayStart': {
         // Clear viewer state for replay — broadcast clear for the board
         broadcast(ws._sessionId, { type: 'clear', boardId: msg.boardId });
+        break;
+      }
+
+      case 'syncState': {
+        // Presenter pushes its full state — replace server state and broadcast to viewers
+        console.log('syncState received:', msg.boards ? msg.boards.length + ' boards' : 'no boards field');
+        if (msg.boards && Array.isArray(msg.boards)) {
+          sess.boards = msg.boards.map((b) => ({
+            id: b.id,
+            strokes: b.strokes || [],
+            undone: [],
+          }));
+          sess.currentBoardId = msg.currentBoardId || 0;
+          sess.theme = msg.theme || 'dark';
+        }
+        const syncPayload = JSON.stringify({
+          type: 'fullState',
+          boards: sess.boards.map((b) => ({ id: b.id, strokes: b.strokes })),
+          currentBoardId: sess.currentBoardId,
+          theme: sess.theme,
+        });
+        let syncCount = 0;
+        for (const viewer of sess.clients.viewers) {
+          if (viewer.readyState === 1) {
+            viewer.send(syncPayload);
+            syncCount++;
+          }
+        }
+        console.log('syncState sent to', syncCount, 'viewers');
         break;
       }
 

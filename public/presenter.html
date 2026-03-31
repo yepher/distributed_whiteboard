@@ -30,8 +30,9 @@
       <button id="btn-redo" class="tool-btn" title="Redo">
         <svg viewBox="0 0 24 24" width="24" height="24"><path d="M11.5 8c2.65 0 5.05 1 6.9 2.6L22 7v9h-9l3.6-3.6C15.1 11.1 13.4 10.5 11.5 10.5c-3.5 0-6.5 2.3-7.5 5.5L1.8 15.2C3.2 11.2 7 8 11.5 8z" fill="currentColor"/></svg>
       </button>
-      <button id="btn-replay" class="tool-btn" title="Replay drawing">
-        <svg viewBox="0 0 24 24" width="24" height="24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      <button id="btn-replay" class="tool-btn present-btn" title="Present / Replay drawing">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M10 9.27l4.11 2.73L10 14.73V9.27M8 5v14l11-7L8 5z" fill="currentColor"/></svg>
+        <span>Present</span>
       </button>
     </div>
 
@@ -94,7 +95,11 @@
         <div id="download-menu" class="download-menu">
           <button data-format="svg">SVG (current board)</button>
           <button data-format="pdf">PDF (all boards)</button>
+          <button data-format="json">JSON (backup)</button>
+          <div class="download-menu-divider"></div>
+          <button data-format="load">Load from file...</button>
         </div>
+        <input type="file" id="file-load" accept=".pdf,.json" style="display:none">
       </div>
     </div>
   </footer>

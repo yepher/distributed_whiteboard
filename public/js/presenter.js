@@ -318,6 +318,18 @@
       boards.push({ id: msg.boardId });
       wb.addBoard(msg.boardId);
       switchToBoard(msg.boardId);
+    } else if (msg.type === 'fullState') {
+      // Restore state from server (on connect/reconnect/sync)
+      wb.loadFullState(msg);
+      document.body.classList.toggle('theme-dark', msg.theme === 'dark');
+      document.body.classList.toggle('theme-light', msg.theme === 'light');
+      // Rebuild presenter board list
+      boards = [];
+      for (const b of msg.boards) {
+        boards.push({ id: b.id });
+      }
+      currentBoardId = msg.currentBoardId;
+      renderBoardList();
     }
   };
 
@@ -468,6 +480,7 @@
   document.getElementById('btn-replay').addEventListener('click', () => {
     if (wb.startReplay()) {
       showPlaybackBar(true);
+      updatePauseButton(); // Show play icon (starts paused)
     }
   });
 
@@ -478,6 +491,8 @@
 
   document.getElementById('pb-step-fwd').addEventListener('click', () => {
     wb.stepForward();
+    // Step animates then auto-pauses — update button after a tick
+    setTimeout(() => updatePauseButton(), 50);
   });
 
   document.getElementById('pb-step-back').addEventListener('click', () => {
@@ -520,6 +535,8 @@
     downloadMenu.classList.remove('show');
   });
 
+  const fileLoadInput = document.getElementById('file-load');
+
   downloadMenu.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -530,8 +547,48 @@
         btn.textContent = 'Generating...';
         await wb.downloadPDF();
         btn.textContent = 'PDF (all boards)';
+      } else if (btn.dataset.format === 'json') {
+        wb.downloadJSON();
+      } else if (btn.dataset.format === 'load') {
+        fileLoadInput.click();
       }
     });
+  });
+
+  fileLoadInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    fileLoadInput.value = ''; // Reset so same file can be loaded again
+
+    try {
+      if (file.name.endsWith('.json')) {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        wb.loadFromJSON(data);
+      } else if (file.name.endsWith('.pdf')) {
+        await wb.loadFromPDF(file);
+      } else {
+        alert('Unsupported file type. Use .pdf or .json');
+        return;
+      }
+
+      // Rebuild presenter state from loaded boards
+      boards = [];
+      for (const [id] of wb.boards) {
+        boards.push({ id });
+      }
+      currentBoardId = wb.currentBoardId;
+      document.body.classList.toggle('theme-dark', wb.theme === 'dark');
+      document.body.classList.toggle('theme-light', wb.theme === 'light');
+      renderBoardList();
+
+      // Sync to viewers
+      send({ type: 'resync' });
+
+      showToast('Whiteboard loaded!');
+    } catch (err) {
+      alert('Failed to load: ' + err.message);
+    }
   });
 
   // --- Keyboard shortcuts ---
@@ -554,7 +611,11 @@
 
   // --- Sync button ---
   document.getElementById('btn-sync').addEventListener('click', () => {
-    send({ type: 'resync' });
+    // Send the presenter's actual current state to overwrite server + viewer state
+    const state = wb.toJSON();
+    const syncMsg = { type: 'syncState', ...state };
+    console.log('Sync: sending', state.boards.length, 'boards, total strokes:', state.boards.reduce((n, b) => n + b.strokes.length, 0));
+    send(syncMsg);
     const toastEl = document.getElementById('share-toast');
     toastEl.textContent = 'Viewers synced';
     toastEl.classList.add('show');
