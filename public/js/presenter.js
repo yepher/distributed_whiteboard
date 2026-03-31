@@ -22,32 +22,71 @@
     history.replaceState(null, '', '?' + params.toString());
   }
 
-  // --- WebSocket setup ---
+  // --- WebSocket setup (with auto-reconnect) ---
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${location.host}?role=presenter&session=${sessionId}`);
+  const wsUrl = `${protocol}//${location.host}?role=presenter&session=${sessionId}`;
   const statusEl = document.getElementById('connection-status');
+  let ws = null;
+  let wsReconnectTimer = null;
+  const WS_RECONNECT_INTERVAL = 5000;
 
-  ws.onopen = () => {
-    statusEl.textContent = 'Connected';
-    statusEl.className = 'connected';
-    setTimeout(() => statusEl.classList.add('fade'), 2000);
-  };
+  function connectWebSocket() {
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch {
+      showWsOffline();
+      return;
+    }
 
-  ws.onclose = () => {
-    statusEl.textContent = 'Disconnected';
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected';
+      statusEl.className = 'connected';
+      setTimeout(() => statusEl.classList.add('fade'), 2000);
+      _applyOnMessage();
+      if (wsReconnectTimer) {
+        clearInterval(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+    };
+
+    ws.onclose = () => {
+      showWsOffline();
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {
+      // onclose will fire after this
+    };
+  }
+
+  function showWsOffline() {
+    statusEl.textContent = 'Offline — drawing locally';
     statusEl.className = 'disconnected';
-  };
+    statusEl.classList.remove('fade');
+  }
 
-  ws.onerror = () => {
-    statusEl.textContent = 'Connection error';
-    statusEl.className = 'disconnected';
-  };
+  function scheduleReconnect() {
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = setInterval(() => {
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
+    }, WS_RECONNECT_INTERVAL);
+  }
 
   function send(msg) {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg));
     }
   }
+
+  // onmessage handler set later — applied on each connect
+  let _wsOnMessage = null;
+  function _applyOnMessage() {
+    if (ws && _wsOnMessage) ws.onmessage = _wsOnMessage;
+  }
+
+  connectWebSocket();
 
   // Throttle live stroke updates to ~30fps
   let lastLiveSend = 0;
@@ -312,7 +351,7 @@
   }
 
   // Handle server response for new board
-  ws.onmessage = (event) => {
+  _wsOnMessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'boardCreated') {
       boards.push({ id: msg.boardId });
@@ -332,6 +371,7 @@
       renderBoardList();
     }
   };
+  _applyOnMessage(); // Apply now if already connected
 
   document.getElementById('add-board').addEventListener('click', addBoard);
 

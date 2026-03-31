@@ -11,27 +11,55 @@
   }
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${location.host}?role=viewer&session=${sessionId}`);
+  const wsUrl = `${protocol}//${location.host}?role=viewer&session=${sessionId}`;
   const statusEl = document.getElementById('connection-status');
   const indicatorEl = document.getElementById('board-indicator');
+  let ws = null;
+  let wsReconnectTimer = null;
 
-  ws.onopen = () => {
-    statusEl.textContent = 'Connected';
-    statusEl.className = 'connected';
-    setTimeout(() => statusEl.classList.add('fade'), 2000);
-  };
+  function connectWebSocket() {
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch {
+      showOffline();
+      return;
+    }
 
-  ws.onclose = () => {
-    statusEl.textContent = 'Disconnected — waiting for reconnect...';
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected';
+      statusEl.className = 'connected';
+      setTimeout(() => statusEl.classList.add('fade'), 2000);
+      ws.onmessage = handleMessage;
+      if (wsReconnectTimer) {
+        clearInterval(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+    };
+
+    ws.onclose = () => {
+      showOffline();
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {};
+  }
+
+  function showOffline() {
+    statusEl.textContent = 'Waiting for server...';
     statusEl.className = 'disconnected';
-    // Auto-reconnect after 2s
-    setTimeout(() => location.reload(), 2000);
-  };
+    statusEl.classList.remove('fade');
+  }
 
-  ws.onerror = () => {
-    statusEl.textContent = 'Connection error';
-    statusEl.className = 'disconnected';
-  };
+  function scheduleReconnect() {
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = setInterval(() => {
+      if (!ws || ws.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
+    }, 5000);
+  }
+
+  connectWebSocket();
 
   // Whiteboard (read-only)
   const canvas = document.getElementById('whiteboard');
@@ -105,7 +133,7 @@
     });
   }
 
-  ws.onmessage = (event) => {
+  function handleMessage(event) {
     const msg = JSON.parse(event.data);
 
     switch (msg.type) {
@@ -182,5 +210,5 @@
         document.body.classList.toggle('theme-light', msg.theme === 'light');
         break;
     }
-  };
+  }
 })();
