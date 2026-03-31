@@ -17,6 +17,8 @@
   let ws = null;
   let wsReconnectTimer = null;
 
+  let wsConnectAttempts = 0;
+
   function connectWebSocket() {
     try {
       ws = new WebSocket(wsUrl);
@@ -26,6 +28,7 @@
     }
 
     ws.onopen = () => {
+      wsConnectAttempts = 0;
       statusEl.textContent = 'Connected';
       statusEl.className = 'connected';
       setTimeout(() => statusEl.classList.add('fade'), 2000);
@@ -37,8 +40,11 @@
     };
 
     ws.onclose = () => {
+      wsConnectAttempts++;
       showOffline();
-      scheduleReconnect();
+      if (wsConnectAttempts <= 1) {
+        scheduleReconnect();
+      }
     };
 
     ws.onerror = () => {};

@@ -30,7 +30,15 @@
   let wsReconnectTimer = null;
   const WS_RECONNECT_INTERVAL = 5000;
 
+  let wsConnectAttempts = 0;
+
   function connectWebSocket() {
+    // Don't spam reconnects — back off after first failure
+    if (wsConnectAttempts > 0) {
+      // Test with a fetch first to avoid noisy console WebSocket errors
+      fetch(location.origin, { method: 'HEAD', mode: 'no-cors' }).catch(() => {});
+    }
+
     try {
       ws = new WebSocket(wsUrl);
     } catch {
@@ -39,6 +47,7 @@
     }
 
     ws.onopen = () => {
+      wsConnectAttempts = 0;
       statusEl.textContent = 'Connected';
       statusEl.className = 'connected';
       setTimeout(() => statusEl.classList.add('fade'), 2000);
@@ -50,13 +59,15 @@
     };
 
     ws.onclose = () => {
+      wsConnectAttempts++;
       showWsOffline();
-      scheduleReconnect();
+      if (wsConnectAttempts <= 1) {
+        // Only auto-retry once — after that, user can manually retry
+        scheduleReconnect();
+      }
     };
 
-    ws.onerror = () => {
-      // onclose will fire after this
-    };
+    ws.onerror = () => {};
   }
 
   function showWsOffline() {
