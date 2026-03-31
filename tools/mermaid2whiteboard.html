@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mermaid → Whiteboard</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 20px;
+      background: #111;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: #1FD5F9; color: #000; }
+    .btn-primary:hover { background: #17b8d8; }
+    .btn-secondary { background: #333; color: #e5e5e5; }
+    .btn-secondary:hover { background: #444; }
+    .btn-success { background: #22c55e; color: #000; }
+    .btn-success:hover { background: #16a34a; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 8px 16px;
+      background: #161616;
+      border-bottom: 1px solid #333;
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .panel:first-child { border-right: 1px solid #333; }
+    #mermaid-input {
+      flex: 1;
+      width: 100%;
+      padding: 16px;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      border: none;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+    }
+    #preview {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d0d0d;
+    }
+    #preview svg {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #preview .placeholder {
+      color: #444;
+      font-size: 14px;
+      text-align: center;
+    }
+    .status {
+      padding: 8px 16px;
+      background: #111;
+      border-top: 1px solid #333;
+      font-size: 13px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .status .count { color: #1FD5F9; font-weight: 600; }
+    .options {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 0 16px;
+    }
+    .options label {
+      font-size: 13px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .options select, .options input[type="number"] {
+      padding: 4px 8px;
+      background: #222;
+      color: #e5e5e5;
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mermaid → Whiteboard</h1>
+    <div class="options">
+      <label>Theme:
+        <select id="opt-theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <label>Jitter:
+        <input type="number" id="opt-jitter" value="2" min="0" max="10" step="0.5" style="width:60px">
+      </label>
+      <label>Stroke width:
+        <input type="number" id="opt-width" value="2" min="1" max="8" step="0.5" style="width:60px">
+      </label>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-primary" id="btn-convert">Convert</button>
+      <button class="btn btn-success" id="btn-download" disabled>Download JSON</button>
+    </div>
+  </header>
+  <div class="main">
+    <div class="panel">
+      <div class="panel-header">Mermaid Syntax</div>
+      <textarea id="mermaid-input" spellcheck="false" placeholder="Paste Mermaid syntax here...
+
+Example:
+flowchart LR
+  A[Phone] -->|Dials| B[PSTN]
+  B -->|Routes| C[SIP Gateway]
+  C -->|SIP| D[LiveKit]
+  D --> E[AI Agent]">flowchart LR
+  A["Caller\n(Phone)"] -->|"Dials\nnumber"| B["Phone Network\n(PSTN)"]
+  B -->|"Routes\ncall"| C["SIP Provider"]
+  C -->|"SIP"| D["LiveKit\nSIP Service"]
+  D -->|"Connects"| E["LiveKit\nRoom"]
+  E --- F["AI Agent"]</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Preview</div>
+      <div id="preview">
+        <div class="placeholder">Click "Convert" to render</div>
+      </div>
+    </div>
+  </div>
+  <div class="status">
+    <span id="status-text">Ready</span>
+    <span id="status-count"></span>
+  </div>
+
+  <!-- Hidden SVG container for path sampling -->
+  <svg id="sampler" style="position:absolute;left:-9999px;top:-9999px" width="1" height="1"></svg>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+(function() {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+  });
+
+  const input = document.getElementById('mermaid-input');
+  const preview = document.getElementById('preview');
+  const btnConvert = document.getElementById('btn-convert');
+  const btnDownload = document.getElementById('btn-download');
+  const statusText = document.getElementById('status-text');
+  const statusCount = document.getElementById('status-count');
+  const sampler = document.getElementById('sampler');
+
+  let lastResult = null;
+
+  // --- Convert ---
+  btnConvert.addEventListener('click', async () => {
+    const source = input.value.trim();
+    if (!source) return;
+
+    statusText.textContent = 'Rendering Mermaid...';
+    btnConvert.disabled = true;
+
+    try {
+      // Render Mermaid to SVG
+      const { svg } = await mermaid.render('mermaid-output', source);
+      preview.innerHTML = svg;
+
+      const svgEl = preview.querySelector('svg');
+      if (!svgEl) throw new Error('No SVG generated');
+
+      statusText.textContent = 'Parsing SVG...';
+
+      // Parse SVG to whiteboard elements
+      const elements = parseSVG(svgEl);
+      const theme = document.getElementById('opt-theme').value;
+
+      lastResult = {
+        v: 1,
+        boards: [{ id: 0, strokes: elements }],
+        currentBoardId: 0,
+        theme: theme,
+      };
+
+      btnDownload.disabled = false;
+      statusText.textContent = 'Done!';
+      statusCount.textContent = `${elements.length} elements`;
+
+    } catch (e) {
+      preview.innerHTML = `<div class="placeholder" style="color:#ef4444">Error: ${e.message}</div>`;
+      statusText.textContent = 'Error';
+      statusCount.textContent = '';
+      lastResult = null;
+      btnDownload.disabled = true;
+    }
+
+    btnConvert.disabled = false;
+  });
+
+  // --- Download ---
+  btnDownload.addEventListener('click', () => {
+    if (!lastResult) return;
+    const json = JSON.stringify(lastResult, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mermaid-whiteboard.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // --- SVG Parsing ---
+  // Uses getBoundingClientRect for ALL positioning — bypasses nested transform issues
+  function parseSVG(svgEl) {
+    const elements = [];
+    const jitter = parseFloat(document.getElementById('opt-jitter').value) || 2;
+    const strokeWidth = parseFloat(document.getElementById('opt-width').value) || 2;
+    const theme = document.getElementById('opt-theme').value;
+
+    const defaultStrokeColor = theme === 'dark' ? '#1FD5F9' : '#002CF2';
+    const defaultTextColor = theme === 'dark' ? '#e5e5e5' : '#1e1e1e';
+
+    // Get SVG screen rect and viewBox for coordinate mapping
+    const svgRect = svgEl.getBoundingClientRect();
+    const viewBox = svgEl.getAttribute('viewBox');
+    let vbW, vbH;
+    if (viewBox) {
+      const parts = viewBox.split(/[\s,]+/).map(Number);
+      vbW = parts[2];
+      vbH = parts[3];
+    } else {
+      vbW = svgRect.width;
+      vbH = svgRect.height;
+    }
+    const scaleX = vbW / svgRect.width;
+    const scaleY = vbH / svgRect.height;
+
+    // Convert screen coords to normalized 0-1 whiteboard coords
+    // Preserve aspect ratio: fit the diagram inside the canvas with uniform scaling
+    const pad = 0.08;
+    const canvasAspect = 16 / 9; // Whiteboard is roughly 16:9
+    const svgAspect = vbW / vbH;
+
+    let fitW, fitH, offsetNormX, offsetNormY;
+    const usable = 1 - 2 * pad;
+
+    if (svgAspect > canvasAspect) {
+      // SVG is wider than canvas — fit to width, center vertically
+      fitW = usable;
+      fitH = usable * (canvasAspect / svgAspect);
+      offsetNormX = pad;
+      offsetNormY = pad + (usable - fitH) / 2;
+    } else {
+      // SVG is taller than canvas — fit to height, center horizontally
+      fitH = usable;
+      fitW = usable * (svgAspect / canvasAspect);
+      offsetNormX = pad + (usable - fitW) / 2;
+      offsetNormY = pad;
+    }
+
+    function toNorm(screenX, screenY) {
+      const svgX = (screenX - svgRect.left) * scaleX;
+      const svgY = (screenY - svgRect.top) * scaleY;
+      return {
+        x: offsetNormX + (svgX / vbW) * fitW,
+        y: offsetNormY + (svgY / vbH) * fitH,
+      };
+    }
+
+    // --- Parse nodes (rectangles) ---
+    const seenRects = new Set();
+    svgEl.querySelectorAll('.node rect, .node .basic').forEach((rect) => {
+      const br = rect.getBoundingClientRect();
+      if (br.width < 15 || br.height < 15) return;
+      // Skip backgrounds
+      if (br.width > svgRect.width * 0.85 && br.height > svgRect.height * 0.85) return;
+
+      const key = `${Math.round(br.left)},${Math.round(br.top)},${Math.round(br.width)}`;
+      if (seenRects.has(key)) return;
+      seenRects.add(key);
+
+      const tl = toNorm(br.left, br.top);
+      const tr = toNorm(br.right, br.top);
+      const bleft = toNorm(br.left, br.bottom);
+      const bright = toNorm(br.right, br.bottom);
+
+      const corners = [
+        [tl.x, tl.y], [tr.x, tr.y], [bright.x, bright.y], [bleft.x, bleft.y]
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const from = corners[i];
+        const to = corners[(i + 1) % 4];
+        elements.push(makeHandDrawnLineNorm(from, to, defaultStrokeColor, strokeWidth, jitter * 0.001));
+      }
+    });
+
+    // --- Parse edges (paths) ---
+    svgEl.querySelectorAll('.edgePath path, .flowchart-link, path[class*="edge"]').forEach((pathEl) => {
+      const d = pathEl.getAttribute('d');
+      if (!d) return;
+
+      // Sample the path using the live SVG (includes all transforms)
+      const points = samplePathScreen(pathEl, svgRect, scaleX, scaleY, vbW, toNorm, jitter);
+      if (points.length < 2) return;
+
+      elements.push({
+        id: genId(),
+        points: points,
+        color: defaultStrokeColor,
+        width: strokeWidth,
+        tool: 'pen',
+        opacity: 1,
+      });
+    });
+
+    // --- Parse text labels ---
+    const seenTexts = new Set();
+
+    // Try node labels first
+    svgEl.querySelectorAll('.nodeLabel, .node .label, .edgeLabel .label, .edgeLabel span').forEach((textEl) => {
+      addTextElement(textEl, elements, seenTexts, toNorm, defaultTextColor);
+    });
+
+    // Fallback: foreignObject content
+    if (elements.filter(e => e.tool === 'text').length === 0) {
+      svgEl.querySelectorAll('foreignObject').forEach((fo) => {
+        addTextElement(fo, elements, seenTexts, toNorm, defaultTextColor);
+      });
+    }
+
+    // Last fallback: all text elements
+    if (elements.filter(e => e.tool === 'text').length === 0) {
+      svgEl.querySelectorAll('text').forEach((textEl) => {
+        addTextElement(textEl, elements, seenTexts, toNorm, defaultTextColor);
+      });
+    }
+
+    return elements;
+  }
+
+  function addTextElement(el, elements, seenTexts, toNormFn, color) {
+    const text = el.textContent.trim().replace(/\s+/g, ' ');
+    if (!text || text.length < 1) return;
+    if (seenTexts.has(text)) return;
+
+    const br = el.getBoundingClientRect();
+    if (br.width === 0 && br.height === 0) return;
+
+    seenTexts.add(text);
+
+    const pos = toNormFn(br.left, br.top);
+    const posEnd = toNormFn(br.right, br.bottom);
+    const normH = posEnd.y - pos.y;
+
+    elements.push({
+      id: genId(),
+      tool: 'text',
+      x: pos.x,
+      y: pos.y,
+      text: text,
+      color: color,
+      fontSize: Math.max(14, Math.min(24, normH * 500)),
+      opacity: 1,
+    });
+  }
+
+  // --- Helpers ---
+  function genId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  }
+
+  function makeHandDrawnLineNorm(from, to, color, width, jitterNorm) {
+    const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    const steps = Math.max(4, Math.round(dist * 500)); // More steps for longer lines
+    const points = [];
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = from[0] + (to[0] - from[0]) * t;
+      const y = from[1] + (to[1] - from[1]) * t;
+
+      const edgeFade = Math.sin(t * Math.PI);
+      const jx = (Math.random() - 0.5) * jitterNorm * edgeFade;
+      const jy = (Math.random() - 0.5) * jitterNorm * edgeFade;
+
+      points.push({
+        x: x + jx,
+        y: y + jy,
+        pressure: 0.4 + Math.random() * 0.2,
+      });
+    }
+
+    return {
+      id: genId(),
+      points: points,
+      color: color,
+      width: width,
+      tool: 'pen',
+      opacity: 1,
+    };
+  }
+
+  function samplePathScreen(pathEl, svgRect, scaleX, scaleY, vbW, toNormFn, jitterPx) {
+    try {
+      const len = pathEl.getTotalLength();
+      if (len < 1) return [];
+
+      const step = Math.max(2, len / 80);
+      const points = [];
+      const jitterNorm = jitterPx / vbW * 0.003;
+
+      // Get the CTM (current transformation matrix) for the path
+      const ctm = pathEl.getCTM();
+
+      for (let d = 0; d <= len; d += step) {
+        const svgPt = pathEl.getPointAtLength(d);
+
+        // Apply the element's transformation matrix to get SVG-space coords
+        let sx, sy;
+        if (ctm) {
+          sx = ctm.a * svgPt.x + ctm.c * svgPt.y + ctm.e;
+          sy = ctm.b * svgPt.x + ctm.d * svgPt.y + ctm.f;
+        } else {
+          sx = svgPt.x;
+          sy = svgPt.y;
+        }
+
+        // Convert SVG-space to screen-space, then to normalized via toNorm
+        const screenX = svgRect.left + sx / scaleX;
+        const screenY = svgRect.top + sy / scaleY;
+        const norm = toNormFn(screenX, screenY);
+
+        const t = d / len;
+        const edgeFade = Math.sin(t * Math.PI) * 0.5 + 0.5;
+        const jx = (Math.random() - 0.5) * jitterNorm * edgeFade;
+        const jy = (Math.random() - 0.5) * jitterNorm * edgeFade;
+
+        points.push({
+          x: norm.x + jx,
+          y: norm.y + jy,
+          pressure: 0.4 + Math.random() * 0.2,
+        });
+      }
+
+      return points;
+    } catch {
+      return [];
+    }
+  }
+})();
+  </script>
+</body>
+</html>

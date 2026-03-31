@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/tools', express.static(path.join(__dirname, 'tools')));
 
 // Routes
 app.get('/presenter', (req, res) => {
@@ -21,6 +22,10 @@ app.get('/presenter', (req, res) => {
 
 app.get('/viewer', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
+});
+
+app.get('/mermaid', (req, res) => {
+  res.sendFile(path.join(__dirname, 'tools', 'mermaid2whiteboard.html'));
 });
 
 // --- Session (channel) state ---
@@ -54,6 +59,15 @@ function getBoard(session, id) {
   return session.boards.find((b) => b.id === id);
 }
 
+function sendViewerCount(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  const msg = JSON.stringify({ type: 'viewerCount', count: session.clients.viewers.size });
+  for (const presenter of session.clients.presenters) {
+    if (presenter.readyState === 1) presenter.send(msg);
+  }
+}
+
 // Clean up empty sessions after 30 minutes
 function scheduleCleanup(sessionId) {
   setTimeout(() => {
@@ -82,6 +96,9 @@ wss.on('connection', (ws, req) => {
   } else {
     session.clients.viewers.add(ws);
   }
+
+  // Notify presenters of viewer count change
+  sendViewerCount(sessionId);
 
   // Send full state to any new connection (presenter or viewer)
   // This lets presenters restore their boards on page refresh
@@ -321,6 +338,7 @@ wss.on('connection', (ws, req) => {
     if (sess) {
       sess.clients.presenters.delete(ws);
       sess.clients.viewers.delete(ws);
+      sendViewerCount(ws._sessionId);
       if (sess.clients.presenters.size === 0 && sess.clients.viewers.size === 0) {
         scheduleCleanup(ws._sessionId);
       }

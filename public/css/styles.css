@@ -497,6 +497,14 @@ body.viewer #whiteboard {
   letter-spacing: 0.5px;
 }
 
+.viewer-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
 .share-btn, .sync-btn {
   display: flex;
   align-items: center;

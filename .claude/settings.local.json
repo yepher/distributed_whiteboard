@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/chriswilson/lkworking/project/SIP_Training/meCamera/mecamera -type d ! -path */.*)",
+      "Bash(cp:*)",
+      "Bash(mv mecamera:*)",
+      "Bash(mv mecamera.xcodeproj draw_camera.xcodeproj)",
+      "Bash(cd:*)",
+      "Bash(rm -f Avatar.swift AvatarRenderer.swift StaticAvatar.swift Vad.swift VUMeterView.swift)",
+      "Bash(rm -rf whisper avatars static_avatar .git)"
+    ]
+  }
+}

@@ -380,23 +380,42 @@
       }
       currentBoardId = msg.currentBoardId;
       renderBoardList();
+    } else if (msg.type === 'viewerCount') {
+      const el = document.getElementById('viewer-count');
+      if (el) {
+        el.textContent = msg.count === 1 ? '1 viewer' : msg.count + ' viewers';
+      }
     }
   };
   _applyOnMessage(); // Apply now if already connected
 
   document.getElementById('add-board').addEventListener('click', addBoard);
 
+  // --- Restore saved preferences ---
+  const savedTool = localStorage.getItem('wb-tool');
+  const savedColor = localStorage.getItem('wb-color');
+  const savedWidth = localStorage.getItem('wb-width');
+
   // --- Tool selection ---
   const toolButtons = document.querySelectorAll('#tools-group .tool-btn');
+  function selectTool(toolName) {
+    toolButtons.forEach((b) => b.classList.remove('active'));
+    const match = [...toolButtons].find((b) => b.dataset.tool === toolName);
+    if (match) match.classList.add('active');
+    wb.currentTool = toolName;
+    wb.deselectElement();
+    canvas.classList.toggle('tool-select', toolName === 'select');
+    localStorage.setItem('wb-tool', toolName);
+  }
+
   toolButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      toolButtons.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      wb.currentTool = btn.dataset.tool;
-      wb.deselectElement();
-      canvas.classList.toggle('tool-select', btn.dataset.tool === 'select');
-    });
+    btn.addEventListener('click', () => selectTool(btn.dataset.tool));
   });
+
+  // Restore saved tool
+  if (savedTool && [...toolButtons].some((b) => b.dataset.tool === savedTool)) {
+    selectTool(savedTool);
+  }
 
   // --- Color picker ---
   const colorCurrentBtn = document.getElementById('color-current');
@@ -415,13 +434,19 @@
     }
   });
 
+  function selectColor(color) {
+    colorButtons.forEach((b) => b.classList.remove('active'));
+    const match = [...colorButtons].find((b) => b.dataset.color === color);
+    if (match) match.classList.add('active');
+    wb.currentColor = color;
+    colorCurrentBtn.style.background = color;
+    localStorage.setItem('wb-color', color);
+  }
+
   colorButtons.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      colorButtons.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      wb.currentColor = btn.dataset.color;
-      colorCurrentBtn.style.background = btn.dataset.color;
+      selectColor(btn.dataset.color);
       colorPalette.classList.remove('show');
       // Update active text input color
       if (activeTextInput) {
@@ -436,11 +461,23 @@
     });
   });
 
+  // Restore saved color
+  if (savedColor) {
+    selectColor(savedColor);
+  }
+
   // --- Line width ---
   const lineWidthEl = document.getElementById('line-width');
   lineWidthEl.addEventListener('input', () => {
     wb.currentWidth = parseInt(lineWidthEl.value, 10);
+    localStorage.setItem('wb-width', lineWidthEl.value);
   });
+
+  // Restore saved width
+  if (savedWidth) {
+    lineWidthEl.value = savedWidth;
+    wb.currentWidth = parseInt(savedWidth, 10);
+  }
 
   // --- Undo / Redo ---
   document.getElementById('btn-undo').addEventListener('click', () => {
