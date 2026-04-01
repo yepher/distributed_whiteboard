@@ -1223,9 +1223,18 @@ class Whiteboard {
     const ppf = Math.max(1, Math.round(this._replayPointsPerFrame * this._replaySpeed));
 
     if (el.tool === 'text') {
-      // Typewriter: advance chars
-      const cpf = Math.max(1, Math.round(2 * this._replaySpeed));
-      this._replayCharIdx += cpf;
+      // Typewriter: advance 1 char every N frames for natural typing speed
+      // At 60fps, framesPerChar=8 gives ~7.5 chars/sec (natural feel)
+      const framesPerChar = Math.max(1, Math.round(8 / this._replaySpeed));
+      if (!this._replayTextFrameCount) this._replayTextFrameCount = 0;
+      this._replayTextFrameCount++;
+      if (this._replayTextFrameCount < framesPerChar) {
+        this._replayRedraw();
+        this._scheduleReplayFrame();
+        return;
+      }
+      this._replayTextFrameCount = 0;
+      this._replayCharIdx += 1;
 
       if (this._replayCharIdx >= el.text.length) {
         this._replayCharIdx = el.text.length;
@@ -1283,6 +1292,7 @@ class Whiteboard {
     this._replayStrokeIdx++;
     this._replayPointIdx = 0;
     this._replayCharIdx = 0;
+    this._replayTextFrameCount = 0;
 
     // If step mode, pause after this element
     if (this._replayStepMode) {
