@@ -256,13 +256,11 @@ class Whiteboard {
         const now = Date.now();
         if (!this._lastMoveLiveSend || now - this._lastMoveLiveSend > 33) {
           this._lastMoveLiveSend = now;
+          const moves = [];
           for (const el of this.selectedElements) {
-            this.onMoveLive({
-              boardId: this.currentBoardId,
-              elementId: el.id,
-              element: this._cloneElement(el),
-            });
+            moves.push({ elementId: el.id, element: this._cloneElement(el) });
           }
+          this.onMoveLive({ boardId: this.currentBoardId, moves });
         }
       }
       return;
@@ -794,11 +792,14 @@ class Whiteboard {
   applyMoveLive(msg) {
     const board = this.boards.get(msg.boardId);
     if (!board) return;
-    const idx = board.strokes.findIndex((s) => s.id === msg.elementId);
-    if (idx !== -1) {
-      board.strokes[idx] = msg.element;
-      if (msg.boardId === this.currentBoardId) this.redraw();
+    const moves = msg.moves || [{ elementId: msg.elementId, element: msg.element }];
+    for (const move of moves) {
+      const idx = board.strokes.findIndex((s) => s.id === move.elementId);
+      if (idx !== -1) {
+        board.strokes[idx] = move.element;
+      }
     }
+    if (msg.boardId === this.currentBoardId) this.redraw();
   }
 
   applyDelete(msg) {
