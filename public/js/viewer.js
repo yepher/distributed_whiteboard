@@ -145,8 +145,8 @@
     switch (msg.type) {
       case 'fullState':
         wb.loadFullState(msg);
-        document.body.classList.toggle('theme-dark', msg.theme === 'dark');
-        document.body.classList.toggle('theme-light', msg.theme === 'light');
+        document.body.classList.remove('theme-dark', 'theme-light', 'theme-green');
+        document.body.classList.add('theme-' + (msg.theme || 'dark'));
         boardIds = msg.boards.map((b) => b.id);
         updateIndicator(msg.currentBoardId);
         break;
@@ -212,8 +212,8 @@
 
       case 'themeChange':
         wb.setTheme(msg.theme);
-        document.body.classList.toggle('theme-dark', msg.theme === 'dark');
-        document.body.classList.toggle('theme-light', msg.theme === 'light');
+        document.body.classList.remove('theme-dark', 'theme-light', 'theme-green');
+        document.body.classList.add('theme-' + (msg.theme || 'dark'));
         break;
     }
   }

@@ -367,8 +367,8 @@
     } else if (msg.type === 'fullState') {
       // Restore state from server (on connect/reconnect/sync)
       wb.loadFullState(msg);
-      document.body.classList.toggle('theme-dark', msg.theme === 'dark');
-      document.body.classList.toggle('theme-light', msg.theme === 'light');
+      document.body.classList.remove('theme-dark', 'theme-light', 'theme-green');
+      document.body.classList.add('theme-' + (msg.theme || 'dark'));
       // Rebuild presenter board list
       boards = [];
       for (const b of msg.boards) {
@@ -500,11 +500,17 @@
   });
 
   // --- Theme toggle ---
+  const themeOrder = ['dark', 'light', 'green'];
+  function applyTheme(theme) {
+    wb.setTheme(theme);
+    document.body.classList.remove('theme-dark', 'theme-light', 'theme-green');
+    document.body.classList.add('theme-' + theme);
+  }
+
   document.getElementById('btn-theme').addEventListener('click', () => {
-    const newTheme = wb.theme === 'dark' ? 'light' : 'dark';
-    wb.setTheme(newTheme);
-    document.body.classList.toggle('theme-dark', newTheme === 'dark');
-    document.body.classList.toggle('theme-light', newTheme === 'light');
+    const currentIdx = themeOrder.indexOf(wb.theme);
+    const newTheme = themeOrder[(currentIdx + 1) % themeOrder.length];
+    applyTheme(newTheme);
     send({ type: 'themeChange', theme: newTheme });
     updateAllThumbnails();
   });
@@ -662,8 +668,8 @@
         boards.push({ id });
       }
       currentBoardId = wb.currentBoardId;
-      document.body.classList.toggle('theme-dark', wb.theme === 'dark');
-      document.body.classList.toggle('theme-light', wb.theme === 'light');
+      document.body.classList.remove('theme-dark', 'theme-light', 'theme-green');
+      document.body.classList.add('theme-' + (wb.theme || 'dark'));
       renderBoardList();
 
       // Sync to viewers

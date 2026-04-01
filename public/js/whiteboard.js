@@ -344,6 +344,11 @@ class Whiteboard {
     return { id: el.id, points: el.points.map((p) => ({ ...p })), color: el.color, width: el.width, tool: el.tool, opacity: el.opacity };
   }
 
+  _bgColor() {
+    if (this.theme === 'green') return '#00ff00';
+    return this.theme === 'dark' ? '#000000' : '#ffffff';
+  }
+
   _getToolConfig() {
     const baseWidth = this.currentWidth;
     switch (this.currentTool) {
@@ -354,7 +359,7 @@ class Whiteboard {
       case 'highlighter':
         return { color: this.currentColor, width: baseWidth * 5, opacity: 0.3 };
       case 'eraser':
-        return { color: this.theme === 'dark' ? '#000000' : '#ffffff', width: baseWidth * 4, opacity: 1 };
+        return { color: this._bgColor(), width: baseWidth * 4, opacity: 1 };
       default:
         return { color: this.currentColor, width: baseWidth, opacity: 1 };
     }
@@ -637,7 +642,7 @@ class Whiteboard {
 
   redraw() {
     const ctx = this.ctx;
-    ctx.fillStyle = this.theme === 'dark' ? '#000000' : '#ffffff';
+    ctx.fillStyle = this._bgColor();
     ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
 
     const board = this.boards.get(this.currentBoardId);
@@ -836,7 +841,7 @@ class Whiteboard {
     tmpCanvas.height = height;
     const tmpCtx = tmpCanvas.getContext('2d');
 
-    tmpCtx.fillStyle = this.theme === 'dark' ? '#000000' : '#ffffff';
+    tmpCtx.fillStyle = this._bgColor();
     tmpCtx.fillRect(0, 0, width, height);
 
     const board = this.boards.get(boardId);
@@ -891,7 +896,7 @@ class Whiteboard {
   toSVG() {
     const w = this.logicalWidth;
     const h = this.logicalHeight;
-    const bg = this.theme === 'dark' ? '#000000' : '#ffffff';
+    const bg = this._bgColor();
     const board = this.boards.get(this.currentBoardId);
     if (!board) return '';
 
@@ -1317,7 +1322,7 @@ class Whiteboard {
 
   _replayRedraw() {
     const ctx = this.ctx;
-    ctx.fillStyle = this.theme === 'dark' ? '#000000' : '#ffffff';
+    ctx.fillStyle = this._bgColor();
     ctx.fillRect(0, 0, this.logicalWidth, this.logicalHeight);
 
     if (!this._replayStrokes) return;
