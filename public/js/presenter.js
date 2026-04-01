@@ -130,11 +130,7 @@
       updateCurrentThumbnail();
     },
     onMoveLive: (moveData) => {
-      const now = Date.now();
-      if (now - lastLiveSend > LIVE_INTERVAL) {
-        send({ type: 'moveLive', ...moveData });
-        lastLiveSend = now;
-      }
+      send({ type: 'moveLive', ...moveData });
     },
     onDeleteElement: (data) => {
       send({ type: 'deleteElement', ...data });

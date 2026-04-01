@@ -253,12 +253,16 @@ class Whiteboard {
       this.redraw();
 
       if (this.onMoveLive) {
-        for (const el of this.selectedElements) {
-          this.onMoveLive({
-            boardId: this.currentBoardId,
-            elementId: el.id,
-            element: this._cloneElement(el),
-          });
+        const now = Date.now();
+        if (!this._lastMoveLiveSend || now - this._lastMoveLiveSend > 33) {
+          this._lastMoveLiveSend = now;
+          for (const el of this.selectedElements) {
+            this.onMoveLive({
+              boardId: this.currentBoardId,
+              elementId: el.id,
+              element: this._cloneElement(el),
+            });
+          }
         }
       }
       return;
