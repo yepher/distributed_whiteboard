@@ -258,6 +258,34 @@ wss.on('connection', (ws, req) => {
         break;
       }
 
+      case 'duplicateBoard': {
+        const srcBoard = getBoard(sess, msg.boardId);
+        if (!srcBoard) break;
+        const dupId =
+          sess.boards.length > 0
+            ? Math.max(...sess.boards.map((b) => b.id)) + 1
+            : 0;
+        // Deep clone strokes with new IDs
+        const clonedStrokes = JSON.parse(JSON.stringify(srcBoard.strokes));
+        clonedStrokes.forEach((s) => { if (s.id) s.id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5); });
+        sess.boards.push({ id: dupId, strokes: clonedStrokes, undone: [] });
+        sess.currentBoardId = dupId;
+        broadcast(ws._sessionId, {
+          type: 'addBoard',
+          boardId: dupId,
+          totalBoards: sess.boards.length,
+        });
+        ws.send(
+          JSON.stringify({
+            type: 'boardDuplicated',
+            boardId: dupId,
+            strokes: clonedStrokes,
+            totalBoards: sess.boards.length,
+          })
+        );
+        break;
+      }
+
       case 'deleteBoard': {
         if (sess.boards.length <= 1) break;
         const idx = sess.boards.findIndex((b) => b.id === msg.boardId);

@@ -364,6 +364,13 @@
       boards.push({ id: msg.boardId });
       wb.addBoard(msg.boardId);
       switchToBoard(msg.boardId);
+    } else if (msg.type === 'boardDuplicated') {
+      boards.push({ id: msg.boardId });
+      wb.addBoard(msg.boardId);
+      // Load the cloned strokes into the new board
+      const board = wb.boards.get(msg.boardId);
+      if (board) board.strokes = msg.strokes || [];
+      switchToBoard(msg.boardId);
     } else if (msg.type === 'fullState') {
       // Restore state from server (on connect/reconnect/sync)
       wb.loadFullState(msg);
@@ -386,6 +393,10 @@
   _applyOnMessage(); // Apply now if already connected
 
   document.getElementById('add-board').addEventListener('click', addBoard);
+
+  document.getElementById('dup-board').addEventListener('click', () => {
+    send({ type: 'duplicateBoard', boardId: currentBoardId });
+  });
 
   // --- Restore saved preferences ---
   const savedTool = localStorage.getItem('wb-tool');
